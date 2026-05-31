@@ -6,7 +6,8 @@ import 'package:path_provider/path_provider.dart';
 
 class SyncService {
   // Your private repository sync configurations
-  static const String _githubToken = "YOUR_PERSONAL_ACCESS_TOKEN";
+  static const String _githubToken =
+      "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";
   static const String _repoOwner = "YOUR_GITHUB_USERNAME";
   static const String _repoName = "YOUR_PRIVATE_REPO_NAME";
   static const String _filePath = "vault_data/encrypted_transactions.hive";
