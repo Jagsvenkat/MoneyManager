@@ -543,9 +543,13 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                   );
 
                   // 4. Inject it into the encrypted engine
+                  // 4. Inject it into the encrypted engine
                   await txBox.put(newTransaction.id, newTransaction);
 
-                  // 5. Dismiss the input panel safely
+                  // 5. Instantly broadcast the encrypted block safely to your private repository
+                  SyncService.uploadToBackup();
+
+                  // 6. Dismiss the input panel safely
                   if (mounted) {
                     Navigator.pop(context);
                   }
@@ -595,6 +599,11 @@ class _UnlockScreenState extends State<UnlockScreen> {
     });
 
     try {
+      // Pull down any fresh entries logged by the other 2 users first
+      await SyncService.downloadLatestBackup();
+
+      final encryptionKey = SecurityService.deriveKey(_passwordController.text);
+
       // 1. Stretch the user's password into a 256-bit AES cryptographic key
       final encryptionKey = SecurityService.deriveKey(_passwordController.text);
 
