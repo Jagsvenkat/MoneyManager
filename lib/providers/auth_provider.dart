@@ -1,6 +1,16 @@
 import 'package:flutter/material.dart';
 import '../core/services/auth_service.dart';
 
+/// Maps AuthService exceptions to user-safe messages
+String _safeErrorMessage(Object e) {
+  final msg = e.toString();
+  if (msg.contains('User not found')) return 'Account not found. Please register.';
+  if (msg.contains('Invalid password')) return 'Incorrect password. Try again.';
+  if (msg.contains('Password must be at least')) return 'Password must be at least 12 characters.';
+  if (msg.contains('No backup UMK')) return 'Account data missing. Please re-register.';
+  return 'Something went wrong. Please try again.';
+}
+
 class AuthProvider extends ChangeNotifier {
   AuthService? _authService;
   bool _isAuthenticated = false;
@@ -34,7 +44,7 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      _error = e.toString().replaceFirst('Exception: ', '');
+      _error = _safeErrorMessage(e);
       _isLoading = false;
       notifyListeners();
       return false;
@@ -55,7 +65,7 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      _error = e.toString().replaceFirst('Exception: ', '');
+      _error = _safeErrorMessage(e);
       _isLoading = false;
       notifyListeners();
       return false;

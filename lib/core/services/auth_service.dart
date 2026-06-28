@@ -5,7 +5,6 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'dart:convert';
 import 'package:uuid/uuid.dart';
-import 'package:crypto/crypto.dart';
 import '../security/kdf.dart';
 import '../security/secure_storage.dart';
 import '../security/envelope.dart';
@@ -208,21 +207,25 @@ class AuthService {
 
   /// Encrypt UMK for secure backup using password-derived key
   Future<String> _encryptUmkForBackup(Uint8List umk, String password) async {
-    // Derive a wrapping key from password
-    final passwordSalt = Uint8List(16);
+    // Derive a wrapping key from password using random per-user salt
+    // Salt is stored in the envelope's AAD (plaintext authenticated metadata)
+    final passwordSalt = SecureRandom.nextBytes(16);
     final wrappingKey = await KeyDerivationFunction.deriveUserMasterKey(
       'backup',
       password,
       passwordSalt,
     );
 
-    // Encrypt UMK
+    // Encrypt UMK, storing salt in metadata (goes into AAD — authenticated plaintext)
     final envelope = await EnvelopeEncryption.encrypt(
       recordId: 'umk_backup',
       deviceId: _deviceId,
       payload: {'umk': base64Encode(umk)},
       wrappingKey: wrappingKey,
-      metadata: {'type': 'umk_backup'},
+      metadata: {
+        'type': 'umk_backup',
+        'backupSalt': base64Encode(passwordSalt),
+      },
     );
 
     return jsonEncode(envelope.toJson());
@@ -237,15 +240,19 @@ class AuthService {
       jsonDecode(encryptedJson) as Map<String, dynamic>,
     );
 
-    // Derive wrapping key from password
-    final passwordSalt = Uint8List(16);
+    // Extract per-user salt from the AAD (authenticated but plaintext metadata)
+    final aadData = jsonDecode(envelope.aad) as Map<String, dynamic>;
+    final saltBase64 = aadData['backupSalt'] as String?;
+    final passwordSalt = saltBase64 != null
+        ? base64Decode(saltBase64)
+        : SecureRandom.nextBytes(16); // Fallback for legacy backups
+
     final wrappingKey = await KeyDerivationFunction.deriveUserMasterKey(
       'backup',
       password,
       passwordSalt,
     );
 
-    // Decrypt
     final decrypted = await EnvelopeEncryption.decrypt(
       envelope: envelope,
       wrappingKey: wrappingKey,

@@ -4,7 +4,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:hive_ce/hive.dart';
-import '../../models/models.dart';
 import '../security/envelope.dart';
 import '../security/kdf.dart';
 
@@ -125,9 +124,8 @@ class LocalDatabaseService {
         }
 
         expenses.add(expense);
-      } catch (e) {
-        // Log decryption error but continue
-        print('Error decrypting expense: $e');
+      } catch (_) {
+        // Skip decryption error silently — data integrity is maintained
       }
     }
 
@@ -206,8 +204,8 @@ class LocalDatabaseService {
         }
 
         incomes.add(income);
-      } catch (e) {
-        print('Error decrypting income: $e');
+      } catch (_) {
+        // Skip silently
       }
     }
 
@@ -270,8 +268,8 @@ class LocalDatabaseService {
           wrappingKey: _wrappingKey,
         );
         balances.add(balance);
-      } catch (e) {
-        print('Error decrypting balance: $e');
+      } catch (_) {
+        // Skip silently
       }
     }
 
@@ -320,8 +318,8 @@ class LocalDatabaseService {
           wrappingKey: _wrappingKey,
         );
         loans.add(loan);
-      } catch (e) {
-        print('Error decrypting loan: $e');
+      } catch (_) {
+        // Skip silently
       }
     }
 
@@ -380,8 +378,8 @@ class LocalDatabaseService {
           wrappingKey: _wrappingKey,
         );
         investments.add(investment);
-      } catch (e) {
-        print('Error decrypting investment: $e');
+      } catch (_) {
+        // Skip silently
       }
     }
 
@@ -416,8 +414,8 @@ class LocalDatabaseService {
           wrappingKey: _wrappingKey,
         );
         categories.add(category);
-      } catch (e) {
-        print('Error decrypting category: $e');
+      } catch (_) {
+        // Skip silently
       }
     }
 

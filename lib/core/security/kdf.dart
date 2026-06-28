@@ -1,9 +1,8 @@
 // Key Derivation Function (KDF) implementation
-// Supports Argon2id (preferred) with fallback to PBKDF2-HMAC-SHA512
+// Supports PBKDF2-HMAC-SHA512 via the cryptography package
 
 import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
-import 'package:crypto/crypto.dart' as crypto_pkg;
 import 'dart:convert';
 
 class KdfParams {
@@ -19,7 +18,7 @@ class KdfParams {
     this.timeParam = 3,
     this.memoryParam = 65536,
     this.parallelism = 4,
-    this.iterations = 200000,
+    this.iterations = 600000,
     this.outputLength = 32,
   });
 
@@ -33,11 +32,11 @@ class KdfParams {
   };
 
   factory KdfParams.fromJson(Map<String, dynamic> json) => KdfParams(
-    algorithm: json['algorithm'] ?? 'argon2id',
+    algorithm: json['algorithm'] ?? 'pbkdf2',
     timeParam: json['timeParam'] ?? 3,
     memoryParam: json['memoryParam'] ?? 65536,
     parallelism: json['parallelism'] ?? 4,
-    iterations: json['iterations'] ?? 200000,
+    iterations: json['iterations'] ?? 600000,
     outputLength: json['outputLength'] ?? 32,
   );
 }
@@ -46,7 +45,7 @@ class KdfParams {
 class KeyDerivationFunction {
   static const defaultParams = KdfParams(
     algorithm: 'pbkdf2',
-    iterations: 200000,
+    iterations: 600000,
     outputLength: 32,
   );
 
@@ -62,19 +61,25 @@ class KeyDerivationFunction {
     return _derivePbkdf2(input, salt, params);
   }
 
-  /// PBKDF2-HMAC-SHA512 with 200,000 iterations minimum
-  static Uint8List _derivePbkdf2(
+  /// PBKDF2-HMAC-SHA512 with minimum iteration floor
+  static Future<Uint8List> _derivePbkdf2(
     String input,
     Uint8List salt,
     KdfParams params,
-  ) {
+  ) async {
     final bytes = utf8.encode(input);
-    final iterations = params.iterations > 200000 ? params.iterations : 200000;
+    final iterations = params.iterations > 600000 ? params.iterations : 600000;
 
-    // Fixed collision by using renamed custom calculation engine
-    return CustomPbkdf2Engine(
+    final pbkdf2 = Pbkdf2(
+      macAlgorithm: Hmac(Sha512()),
       iterations: iterations,
-    ).deriveBitsSync(secret: bytes, nonce: salt, bits: params.outputLength * 8);
+      bits: params.outputLength * 8,
+    );
+    final secretKey = await pbkdf2.deriveKey(
+      secretKey: SecretKey(bytes),
+      nonce: salt,
+    );
+    return Uint8List.fromList(await secretKey.extractBytes());
   }
 
   /// Derive a wrapping key from UMK for envelope encryption
@@ -92,55 +97,4 @@ class KeyDerivationFunction {
   }
 }
 
-/// Renamed to prevent library class name conflicts
-class CustomPbkdf2Engine {
-  final int iterations;
 
-  CustomPbkdf2Engine({required this.iterations});
-
-  Uint8List deriveBitsSync({
-    required List<int> secret,
-    required Uint8List nonce,
-    required int bits,
-  }) {
-    final blockCount = (bits + 511) ~/ 512; // SHA512 = 512 bits
-    final output = Uint8List(blockCount * 64);
-
-    for (int i = 1; i <= blockCount; i++) {
-      final block = _pbkdf2Block(secret, nonce, i);
-      final startIdx = (i - 1) * 64;
-      final endIdx = i * 64;
-      output.setRange(startIdx, endIdx.clamp(0, output.length), block);
-    }
-
-    return Uint8List.sublistView(output, 0, bits ~/ 8);
-  }
-
-  Uint8List _pbkdf2Block(List<int> secret, Uint8List salt, int blockIndex) {
-    final hmac = crypto_pkg.Hmac(crypto_pkg.sha512, secret);
-    final saltWithIndex = Uint8List(salt.length + 4)
-      ..setAll(0, salt)
-      ..setAll(salt.length, _bigEndianBytes(blockIndex));
-
-    var u = Uint8List.fromList(hmac.convert(saltWithIndex).bytes);
-    final result = Uint8List.fromList(u);
-
-    for (int i = 1; i < iterations; i++) {
-      u = Uint8List.fromList(hmac.convert(u).bytes);
-      for (int j = 0; j < result.length; j++) {
-        result[j] ^= u[j];
-      }
-    }
-
-    return result;
-  }
-
-  List<int> _bigEndianBytes(int value) {
-    return [
-      (value >> 24) & 0xff,
-      (value >> 16) & 0xff,
-      (value >> 8) & 0xff,
-      value & 0xff,
-    ];
-  }
-}

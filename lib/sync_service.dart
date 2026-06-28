@@ -3,16 +3,18 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+import 'core/security/secure_storage.dart';
 
 class SyncService {
-  // Your private repository sync configurations
-  static const String _githubToken =
-      "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";
   static const String _repoOwner = "YOUR_GITHUB_USERNAME";
   static const String _repoName = "YOUR_PRIVATE_REPO_NAME";
   static const String _filePath = "vault_data/encrypted_transactions.hive";
 
-  /// Gets the local file path where Hive stores data on the device
+  static Future<String?> _getToken() async {
+    await SecureStorageService.initialize();
+    return await SecureStorageService.loadGitHubPat('default');
+  }
+
   static Future<File> _getLocalDatabaseFile() async {
     if (kIsWeb) {
       throw UnsupportedError(
@@ -23,11 +25,13 @@ class SyncService {
     return File('${directory.path}/encrypted_transactions.hive');
   }
 
-  /// Pushes the local encrypted binary file straight to your private backup repository
   static Future<bool> uploadToBackup() async {
-    if (kIsWeb) return true; // Web uses automated browser backup layers
+    if (kIsWeb) return true;
 
     try {
+      final token = await _getToken();
+      if (token == null || token.isEmpty) return false;
+
       final file = await _getLocalDatabaseFile();
       if (!await file.exists()) return false;
 
@@ -38,10 +42,9 @@ class SyncService {
         'https://api.github.com/repos/$_repoOwner/$_repoName/contents/$_filePath',
       );
 
-      // We first check if the file already exists on GitHub to get its version SHA
       final checkResponse = await http.get(
         url,
-        headers: {'Authorization': 'token $_githubToken'},
+        headers: {'Authorization': 'token $token'},
       );
       String? sha;
       if (checkResponse.statusCode == 200) {
@@ -51,7 +54,7 @@ class SyncService {
       final response = await http.put(
         url,
         headers: {
-          'Authorization': 'token $_githubToken',
+          'Authorization': 'token $token',
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
@@ -63,22 +66,23 @@ class SyncService {
 
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
-      debugPrint("Sync Upload Failed: $e");
       return false;
     }
   }
 
-  /// Pulls down the latest encrypted version from the repository before the app unlocks
   static Future<bool> downloadLatestBackup() async {
     if (kIsWeb) return true;
 
     try {
+      final token = await _getToken();
+      if (token == null || token.isEmpty) return false;
+
       final url = Uri.parse(
         'https://api.github.com/repos/$_repoOwner/$_repoName/contents/$_filePath',
       );
       final response = await http.get(
         url,
-        headers: {'Authorization': 'token $_githubToken'},
+        headers: {'Authorization': 'token $token'},
       );
 
       if (response.statusCode == 200) {
@@ -92,7 +96,6 @@ class SyncService {
       }
       return false;
     } catch (e) {
-      debugPrint("Sync Download Failed: $e");
       return false;
     }
   }

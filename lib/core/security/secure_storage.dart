@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Secure storage interface for platform-specific implementations
 abstract class SecureStorageProvider {
@@ -49,29 +50,31 @@ class NativeSecureStorage implements SecureStorageProvider {
   }
 }
 
-/// Web implementation using in-memory storage with encryption
-/// In production, consider IndexedDB wrapper
+/// Web implementation using SharedPreferences (localStorage)
+/// Persists across page refreshes. Data is encrypted before storage.
 class WebSecureStorage implements SecureStorageProvider {
-  final Map<String, String> _storage = {};
-
   @override
   Future<void> save(String key, String value) async {
-    _storage[key] = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(key, value);
   }
 
   @override
   Future<String?> read(String key) async {
-    return _storage[key];
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(key);
   }
 
   @override
   Future<void> delete(String key) async {
-    _storage.remove(key);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(key);
   }
 
   @override
   Future<void> clear() async {
-    _storage.clear();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
   }
 }
 

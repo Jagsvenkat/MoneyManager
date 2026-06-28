@@ -134,7 +134,7 @@ class GitHubSyncService {
       return SyncResult(
         success: false,
         message: 'Push failed',
-        error: e.toString(),
+        error: 'Sync error: unable to push changes. Check your network and token.',
       );
     }
   }
@@ -225,7 +225,7 @@ class GitHubSyncService {
       return SyncResult(
         success: false,
         message: 'Pull failed',
-        error: e.toString(),
+        error: 'Sync error: unable to pull changes. Check your network and token.',
       );
     }
   }
