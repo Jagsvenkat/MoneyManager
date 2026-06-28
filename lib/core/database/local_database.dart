@@ -5,7 +5,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:hive_ce/hive.dart';
 import '../security/envelope.dart';
-import '../security/kdf.dart';
 
 /// Local database service for encrypted storage
 class LocalDatabaseService {

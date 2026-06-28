@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 import 'package:money_manager/config/app_colors.dart';
+import 'package:money_manager/providers/auth_provider.dart';
 
 class LoansScreen extends StatefulWidget {
   const LoansScreen({super.key});
@@ -9,6 +12,26 @@ class LoansScreen extends StatefulWidget {
 }
 
 class _LoansScreenState extends State<LoansScreen> {
+  List<Map<String, dynamic>> _loans = [];
+  bool _isLoading = true;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadLoans();
+  }
+
+  Future<void> _loadLoans() async {
+    final authService = context.read<AuthProvider>().authService;
+    if (authService == null) return;
+    try {
+      final loans = await authService.database.listLoans();
+      if (mounted) setState(() { _loans = loans; _isLoading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -21,29 +44,79 @@ class _LoansScreenState extends State<LoansScreen> {
           IconButton(icon: const Icon(Icons.add, color: AppColors.primary), onPressed: () => _showAddLoanDialog()),
         ],
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.handshake, size: 64, color: AppColors.textTertiary),
-            const SizedBox(height: 16),
-            const Text('No loans tracked', style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
-            const SizedBox(height: 8),
-            const Text('Track money you lent or borrowed', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () => _showAddLoanDialog(),
-              icon: const Icon(Icons.add),
-              label: const Text('Add Loan'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.warning,
-                foregroundColor: AppColors.background,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _loans.isEmpty
+              ? _buildEmptyState()
+              : _buildLoanList(),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.handshake, size: 64, color: AppColors.textTertiary),
+          const SizedBox(height: 16),
+          const Text('No loans tracked', style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
+          const SizedBox(height: 8),
+          const Text('Track money you lent or borrowed', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () => _showAddLoanDialog(),
+            icon: const Icon(Icons.add),
+            label: const Text('Add Loan'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.warning,
+              foregroundColor: AppColors.background,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildLoanList() {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _loans.length,
+      itemBuilder: (context, index) {
+        final loan = _loans[index];
+        final isToReceive = loan['loanType'] == 'To Receive';
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(isToReceive ? Icons.arrow_downward : Icons.arrow_upward, color: AppColors.warning, size: 20),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(loan['personName'] ?? 'Unknown', style: const TextStyle(color: AppColors.textPrimary, fontSize: 15)),
+                    Text(isToReceive ? 'To Receive' : 'To Pay', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                  ],
+                ),
+              ),
+              Text('₹${loan['amount']?.toStringAsFixed(2) ?? '0.00'}', style: const TextStyle(color: AppColors.warning, fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -126,7 +199,21 @@ class _LoansScreenState extends State<LoansScreen> {
                     backgroundColor: AppColors.warning,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
-                  onPressed: () => Navigator.pop(ctx),
+                  onPressed: () async {
+                    final amount = double.tryParse(amountCtrl.text);
+                    if (personCtrl.text.isEmpty || amount == null || amount <= 0) return;
+                    final authService = context.read<AuthProvider>().authService;
+                    if (authService == null) return;
+                    await authService.database.createLoan({
+                      'id': const Uuid().v4(),
+                      'personName': personCtrl.text,
+                      'amount': amount,
+                      'loanType': loanType,
+                      'dateTime': DateTime.now().toIso8601String(),
+                    });
+                    await _loadLoans();
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  },
                   child: const Text('Save Loan', style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ),

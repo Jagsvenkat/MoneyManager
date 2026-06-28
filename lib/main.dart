@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'config/app_colors.dart';
 import 'config/app_routes.dart';
 import 'providers/auth_provider.dart';
@@ -7,6 +8,7 @@ import 'providers/app_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Hive.initFlutter();
   runApp(const MoneyManagerApp());
 }
 

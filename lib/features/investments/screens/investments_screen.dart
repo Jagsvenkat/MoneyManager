@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 import 'package:money_manager/config/app_colors.dart';
+import 'package:money_manager/providers/auth_provider.dart';
 
 class InvestmentsScreen extends StatefulWidget {
   const InvestmentsScreen({super.key});
@@ -9,6 +12,26 @@ class InvestmentsScreen extends StatefulWidget {
 }
 
 class _InvestmentsScreenState extends State<InvestmentsScreen> {
+  List<Map<String, dynamic>> _investments = [];
+  bool _isLoading = true;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadInvestments();
+  }
+
+  Future<void> _loadInvestments() async {
+    final authService = context.read<AuthProvider>().authService;
+    if (authService == null) return;
+    try {
+      final investments = await authService.database.listInvestments();
+      if (mounted) setState(() { _investments = investments; _isLoading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -21,29 +44,79 @@ class _InvestmentsScreenState extends State<InvestmentsScreen> {
           IconButton(icon: const Icon(Icons.add, color: AppColors.primary), onPressed: () => _showAddInvestmentDialog()),
         ],
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.trending_up, size: 64, color: AppColors.textTertiary),
-            const SizedBox(height: 16),
-            const Text('No investments tracked', style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
-            const SizedBox(height: 8),
-            const Text('Track stocks, mutual funds, and other investments', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () => _showAddInvestmentDialog(),
-              icon: const Icon(Icons.add),
-              label: const Text('Add Investment'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.tertiary,
-                foregroundColor: AppColors.background,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _investments.isEmpty
+              ? _buildEmptyState()
+              : _buildInvestmentList(),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.trending_up, size: 64, color: AppColors.textTertiary),
+          const SizedBox(height: 16),
+          const Text('No investments tracked', style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
+          const SizedBox(height: 8),
+          const Text('Track stocks, mutual funds, and other investments', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () => _showAddInvestmentDialog(),
+            icon: const Icon(Icons.add),
+            label: const Text('Add Investment'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.tertiary,
+              foregroundColor: AppColors.background,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildInvestmentList() {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _investments.length,
+      itemBuilder: (context, index) {
+        final inv = _investments[index];
+        final totalValue = (inv['units'] as num?)?.toDouble() * (inv['pricePerUnit'] as num?)?.toDouble() ?? 0;
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.tertiary.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.show_chart, color: AppColors.tertiary, size: 20),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(inv['name'] ?? 'Investment', style: const TextStyle(color: AppColors.textPrimary, fontSize: 15)),
+                    Text('${inv['units']} units @ ₹${inv['pricePerUnit']}', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                  ],
+                ),
+              ),
+              Text('₹${totalValue.toStringAsFixed(2)}', style: const TextStyle(color: AppColors.tertiary, fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -87,7 +160,7 @@ class _InvestmentsScreenState extends State<InvestmentsScreen> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: type,
+                initialValue: type,
                 dropdownColor: AppColors.surfaceVariant,
                 style: const TextStyle(color: AppColors.textPrimary),
                 decoration: InputDecoration(
@@ -144,7 +217,23 @@ class _InvestmentsScreenState extends State<InvestmentsScreen> {
                     backgroundColor: AppColors.tertiary,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
-                  onPressed: () => Navigator.pop(ctx),
+                  onPressed: () async {
+                    final units = double.tryParse(unitsCtrl.text);
+                    final price = double.tryParse(priceCtrl.text);
+                    if (nameCtrl.text.isEmpty || units == null || price == null) return;
+                    final authService = context.read<AuthProvider>().authService;
+                    if (authService == null) return;
+                    await authService.database.createInvestment({
+                      'id': const Uuid().v4(),
+                      'name': nameCtrl.text,
+                      'type': type,
+                      'units': units,
+                      'pricePerUnit': price,
+                      'dateTime': DateTime.now().toIso8601String(),
+                    });
+                    await _loadInvestments();
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  },
                   child: const Text('Save Investment', style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ),

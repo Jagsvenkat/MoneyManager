@@ -66,7 +66,7 @@ class AuthService {
       username,
       password,
       salt,
-      params: KdfParams.defaultParams,
+      params: KeyDerivationFunction.defaultParams,
     );
 
     // Encrypt UMK with a password-derived key for backup
@@ -76,8 +76,8 @@ class AuthService {
     await SecureStorageService.saveKdfParams(
       userId: username,
       salt: salt,
-      algorithm: KdfParams.defaultParams.algorithm,
-      params: KdfParams.defaultParams.toJson(),
+      algorithm: KeyDerivationFunction.defaultParams.algorithm,
+      params: KeyDerivationFunction.defaultParams.toJson(),
     );
     await SecureStorageService.saveEncryptedUmk(
       userId: username,

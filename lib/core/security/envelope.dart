@@ -5,7 +5,6 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
-import 'package:uuid/uuid.dart';
 
 /// Data Encryption Envelope for secure storage and transmission
 /// Stores encrypted data with metadata for integrity and versioning
@@ -216,7 +215,8 @@ class EnvelopeEncryption {
 
     final secretBox = SecretBox(actualCiphertext, nonce: nonce, mac: Mac(tag));
 
-    return await cipher.decrypt(secretBox, secretKey: secretKey, aad: aad);
+    final result = await cipher.decrypt(secretBox, secretKey: secretKey, aad: aad);
+    return Uint8List.fromList(result);
   }
 
   /// Generate cryptographically secure random bytes

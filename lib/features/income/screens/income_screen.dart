@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 import 'package:money_manager/config/app_colors.dart';
+import 'package:money_manager/providers/auth_provider.dart';
 
 class IncomeScreen extends StatefulWidget {
   const IncomeScreen({super.key});
@@ -9,6 +12,26 @@ class IncomeScreen extends StatefulWidget {
 }
 
 class _IncomeScreenState extends State<IncomeScreen> {
+  List<Map<String, dynamic>> _incomes = [];
+  bool _isLoading = true;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadIncomes();
+  }
+
+  Future<void> _loadIncomes() async {
+    final authService = context.read<AuthProvider>().authService;
+    if (authService == null) return;
+    try {
+      final incomes = await authService.database.listIncome();
+      if (mounted) setState(() { _incomes = incomes; _isLoading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -21,29 +44,78 @@ class _IncomeScreenState extends State<IncomeScreen> {
           IconButton(icon: const Icon(Icons.add, color: AppColors.primary), onPressed: () => _showAddIncomeDialog()),
         ],
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.trending_up, size: 64, color: AppColors.textTertiary),
-            const SizedBox(height: 16),
-            const Text('No income recorded', style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
-            const SizedBox(height: 8),
-            const Text('Track your salary, freelance, and other income', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () => _showAddIncomeDialog(),
-              icon: const Icon(Icons.add),
-              label: const Text('Add Income'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: AppColors.background,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _incomes.isEmpty
+              ? _buildEmptyState()
+              : _buildIncomeList(),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.trending_up, size: 64, color: AppColors.textTertiary),
+          const SizedBox(height: 16),
+          const Text('No income recorded', style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
+          const SizedBox(height: 8),
+          const Text('Track your salary, freelance, and other income', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () => _showAddIncomeDialog(),
+            icon: const Icon(Icons.add),
+            label: const Text('Add Income'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.success,
+              foregroundColor: AppColors.background,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildIncomeList() {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _incomes.length,
+      itemBuilder: (context, index) {
+        final income = _incomes[index];
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.success.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.trending_up, color: AppColors.success, size: 20),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(income['source'] ?? 'Income', style: const TextStyle(color: AppColors.textPrimary, fontSize: 15)),
+                    Text(income['frequency'] ?? 'one-time', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                  ],
+                ),
+              ),
+              Text('₹${income['amount']?.toStringAsFixed(2) ?? '0.00'}', style: const TextStyle(color: AppColors.success, fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -98,7 +170,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: frequency,
+                initialValue: frequency,
                 dropdownColor: AppColors.surfaceVariant,
                 style: const TextStyle(color: AppColors.textPrimary),
                 decoration: InputDecoration(
@@ -122,7 +194,21 @@ class _IncomeScreenState extends State<IncomeScreen> {
                     backgroundColor: AppColors.success,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
-                  onPressed: () => Navigator.pop(ctx),
+                  onPressed: () async {
+                    final amount = double.tryParse(amountCtrl.text);
+                    if (amount == null || amount <= 0) return;
+                    final authService = context.read<AuthProvider>().authService;
+                    if (authService == null) return;
+                    await authService.database.createIncome({
+                      'id': const Uuid().v4(),
+                      'amount': amount,
+                      'source': sourceCtrl.text,
+                      'frequency': frequency,
+                      'dateTime': DateTime.now().toIso8601String(),
+                    });
+                    await _loadIncomes();
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  },
                   child: const Text('Save Income', style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ),

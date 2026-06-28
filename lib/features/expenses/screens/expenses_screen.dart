@@ -11,7 +11,6 @@ class ExpensesScreen extends StatefulWidget {
 class _ExpensesScreenState extends State<ExpensesScreen> {
   final _searchController = TextEditingController();
   String? _selectedCategory;
-  DateTimeRange? _dateRange;
 
   @override
   void dispose() {
