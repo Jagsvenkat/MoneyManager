@@ -84,7 +84,9 @@ class _InvestmentsScreenState extends State<InvestmentsScreen> {
       itemCount: _investments.length,
       itemBuilder: (context, index) {
         final inv = _investments[index];
-        final totalValue = (inv['units'] as num?)?.toDouble() * (inv['pricePerUnit'] as num?)?.toDouble() ?? 0;
+                final units = (inv['units'] as num?)?.toDouble() ?? 0;
+                final price = (inv['pricePerUnit'] as num?)?.toDouble() ?? 0;
+                final totalValue = units * price;
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.all(16),
