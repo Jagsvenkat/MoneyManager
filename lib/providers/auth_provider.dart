@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import '../core/services/auth_service.dart';
 
-/// Manages authentication state
 class AuthProvider extends ChangeNotifier {
-  final AuthService _authService = AuthService.instance;
-
+  AuthService? _authService;
   bool _isAuthenticated = false;
   String? _currentUserId;
   bool _isLoading = false;
@@ -14,65 +12,68 @@ class AuthProvider extends ChangeNotifier {
   String? get currentUserId => _currentUserId;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  AuthService? get authService => _authService;
 
-  /// Register a new user
+  Future<void> initialize() async {
+    _authService = AuthService();
+    await _authService!.initialize();
+    notifyListeners();
+  }
+
   Future<bool> register(String email, String password) async {
+    if (_authService == null) return false;
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final result = await _authService.register(email, password);
+      await _authService!.register(username: email, password: password);
       _isAuthenticated = true;
       _currentUserId = email;
       _isLoading = false;
       notifyListeners();
       return true;
     } catch (e) {
-      _error = e.toString();
+      _error = e.toString().replaceFirst('Exception: ', '');
       _isLoading = false;
       notifyListeners();
       return false;
     }
   }
 
-  /// Login an existing user
   Future<bool> login(String email, String password) async {
+    if (_authService == null) return false;
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final result = await _authService.login(email, password);
+      await _authService!.login(username: email, password: password);
       _isAuthenticated = true;
       _currentUserId = email;
       _isLoading = false;
       notifyListeners();
       return true;
     } catch (e) {
-      _error = e.toString();
+      _error = e.toString().replaceFirst('Exception: ', '');
       _isLoading = false;
       notifyListeners();
       return false;
     }
   }
 
-  /// Logout the current user
   Future<void> logout() async {
+    await _authService?.logout();
     _isAuthenticated = false;
     _currentUserId = null;
     _error = null;
     notifyListeners();
   }
 
-  /// Check if user is authenticated on app start
   Future<void> checkAuthStatus() async {
-    // TODO: Implement session persistence from secure storage
-    // For now, assume not authenticated unless login is called
     notifyListeners();
   }
 
-  /// Clear error
   void clearError() {
     _error = null;
     notifyListeners();

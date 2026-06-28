@@ -1,21 +1,21 @@
 Money Manager App - Complete Project Index
 📋 Quick Navigation
 For Users
-Getting Started: README.md
-Security & Privacy: SECURITY.md
-Setup Guide: README.md - Installation & Setup
-User Guide: README.md - User Guide
-FAQ: README.md - FAQ
+Getting Started: [README.md](README.md)
+Security & Privacy: [SECURITY.md](SECURITY.md)
+Setup Guide: [README.md](README.md)
+User Guide: [README.md](README.md)
+FAQ: [README.md](README.md)
 For Developers
-Architecture Overview: ARCHITECTURE.md
-Project Status: MILESTONE_1_COMPLETE.md
-Implementation Guide: IMPLEMENTATION_STATUS.md
-What's Been Built: DELIVERABLES.md
-Commit History: GIT_COMMIT_GUIDE.md
+Architecture Overview: [ARCHITECTURE.md](ARCHITECTURE.md)
+Project Status: [MILESTONE_1_COMPLETE.md](MILESTONE_1_COMPLETE.md)
+Implementation Guide: [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)
+What's Been Built: [DELIVERABLES.md](DELIVERABLES.md)
+Commit History: [GIT_COMMIT_GUIDE.md](GIT_COMMIT_GUIDE.md)
 For Security Review
-Threat Model: SECURITY.md - Threat Model Assumptions
-Incident Response: SECURITY.md - Incident Response Procedures
-Audit Checklist: SECURITY.md - Security Audit Checklist
+Threat Model: [SECURITY.md](SECURITY.md)
+Incident Response: [SECURITY.md](SECURITY.md)
+Audit Checklist: [SECURITY.md](SECURITY.md)
 Code Review: ARCHITECTURE.md - Code Quality
 📂 Project Structure
 Core Security (lib/core/security/)

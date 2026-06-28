@@ -14,7 +14,7 @@ class KdfParams {
   final int iterations; // PBKDF2 iterations
   final int outputLength;
 
-  KdfParams({
+  const KdfParams({
     required this.algorithm,
     this.timeParam = 3,
     this.memoryParam = 65536,
@@ -71,8 +71,8 @@ class KeyDerivationFunction {
     final bytes = utf8.encode(input);
     final iterations = params.iterations > 200000 ? params.iterations : 200000;
 
-    // Use PBKDF2 from cryptography package
-    return Pbkdf2(
+    // Fixed collision by using renamed custom calculation engine
+    return CustomPbkdf2Engine(
       iterations: iterations,
     ).deriveBitsSync(secret: bytes, nonce: salt, bits: params.outputLength * 8);
   }
@@ -83,21 +83,20 @@ class KeyDerivationFunction {
     String context,
   ) async {
     // Use HKDF-SHA256 for wrapping key derivation
-    final hkdf = Hkdf(hmac: Hmac(Sha256()), hashAlgorithm: Sha256());
+    final hkdf = Hkdf(hmac: Hmac(Sha256()), outputLength: 32);
     final derived = await hkdf.deriveKey(
       secretKey: SecretKey(umk),
       nonce: utf8.encode(context),
-      keyDataLength: 32,
     );
-    return derived.extractBytes();
+    return Uint8List.fromList(await derived.extractBytes());
   }
 }
 
-/// PBKDF2-HMAC-SHA512 implementation
-class Pbkdf2 {
+/// Renamed to prevent library class name conflicts
+class CustomPbkdf2Engine {
   final int iterations;
 
-  Pbkdf2({required this.iterations});
+  CustomPbkdf2Engine({required this.iterations});
 
   Uint8List deriveBitsSync({
     required List<int> secret,

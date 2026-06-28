@@ -2,6 +2,7 @@
 // Uses XChaCha20-Poly1305 for AEAD encryption with DEK wrapping
 
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
 import 'package:uuid/uuid.dart';
@@ -183,7 +184,7 @@ class EnvelopeEncryption {
     required Uint8List nonce,
     required Uint8List aad,
   }) async {
-    final cipher = XChaCha20Poly1305();
+    final cipher = Xchacha20.poly1305Aead();
     final secretKey = SecretKey(key);
 
     final secretBox = await cipher.encrypt(
@@ -193,9 +194,9 @@ class EnvelopeEncryption {
       aad: aad,
     );
 
-    // Return nonce + ciphertext + tag (authenticator)
+    // Return ciphertext + tag (authenticator), nonce is stored separately
     return Uint8List.fromList(
-      secretBox.nonce + secretBox.cipherText + secretBox.mac.bytes,
+      secretBox.cipherText + secretBox.mac.bytes,
     );
   }
 
@@ -206,7 +207,7 @@ class EnvelopeEncryption {
     required Uint8List nonce,
     required Uint8List aad,
   }) async {
-    final cipher = XChaCha20Poly1305();
+    final cipher = Xchacha20.poly1305Aead();
     final secretKey = SecretKey(key);
 
     // Extract ciphertext and tag (last 16 bytes)
@@ -220,13 +221,12 @@ class EnvelopeEncryption {
 
   /// Generate cryptographically secure random bytes
   static Uint8List _generateRandomBytes(int length) {
-    final random = <int>[];
-    // Use secure random from cryptography package
-    final seed = Random.secure();
+    final random = Random.secure();
+    final bytes = Uint8List(length);
     for (int i = 0; i < length; i++) {
-      random.add(seed.nextInt(256));
+      bytes[i] = random.nextInt(256);
     }
-    return Uint8List.fromList(random);
+    return bytes;
   }
 }
 
@@ -236,30 +236,4 @@ class DecryptionException implements Exception {
 
   @override
   String toString() => 'DecryptionException: $message';
-}
-
-/// Secure random number generator
-class Random {
-  static final _instance = _SecureRandom();
-
-  static int nextInt(int max) => _instance.nextInt(max);
-  static Uint8List nextBytes(int length) => _instance.nextBytes(length);
-
-  static _SecureRandom get secure => _instance;
-}
-
-class _SecureRandom {
-  late final _random = Random.secure();
-
-  int nextInt(int max) {
-    return _random.nextInt(max);
-  }
-
-  Uint8List nextBytes(int length) {
-    final bytes = Uint8List(length);
-    for (int i = 0; i < length; i++) {
-      bytes[i] = _random.nextInt(256);
-    }
-    return bytes;
-  }
 }

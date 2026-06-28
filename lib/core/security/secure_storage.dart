@@ -2,6 +2,7 @@
 // Mobile: flutter_secure_storage (Android Keystore / iOS Keychain)
 // Web: IndexedDB with encryption
 
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -18,12 +19,12 @@ abstract class SecureStorageProvider {
 class NativeSecureStorage implements SecureStorageProvider {
   static const _storage = FlutterSecureStorage(
     aOptions: AndroidOptions(
-      keyCipherAlgorithm: 'RSA/ECB/OAEPwithSHA-256andMGF1Padding',
-      storageCipherAlgorithm: 'AES/GCM/NoPadding',
+      keyCipherAlgorithm: KeyCipherAlgorithm.RSA_ECB_OAEPwithSHA_256andMGF1Padding,
+      storageCipherAlgorithm: StorageCipherAlgorithm.AES_GCM_NoPadding,
       resetOnError: false,
     ),
     iOptions: IOSOptions(
-      accessibility: KeychainAccessibility.first_this_device_this_app_only,
+      accessibility: KeychainAccessibility.first_unlock_this_device,
     ),
   );
 
@@ -189,5 +190,3 @@ class SecureStorageService {
   }
 }
 
-// Import json and base64 utilities
-import 'dart:convert';

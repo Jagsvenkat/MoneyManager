@@ -1,6 +1,7 @@
 // Authentication service with KDF and key management
 // Handles user registration, login, and session management
 
+import 'dart:math';
 import 'dart:typed_data';
 import 'dart:convert';
 import 'package:uuid/uuid.dart';

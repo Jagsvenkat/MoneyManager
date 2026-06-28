@@ -5,8 +5,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:hive_ce/hive.dart';
 import '../../models/models.dart';
-import '../../security/envelope.dart';
-import '../../security/kdf.dart';
+import '../security/envelope.dart';
+import '../security/kdf.dart';
 
 /// Local database service for encrypted storage
 class LocalDatabaseService {
@@ -95,8 +95,9 @@ class LocalDatabaseService {
         jsonDecode(envelopeJson) as Map<String, dynamic>,
       );
 
-      if (envelope.syncStatus == 'conflict')
+      if (envelope.syncStatus == 'conflict') {
         continue; // Skip conflicted records
+      }
 
       try {
         final expense = await EnvelopeEncryption.decrypt(

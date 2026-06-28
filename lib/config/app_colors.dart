@@ -61,7 +61,7 @@ class AppColors {
 
   /// Get color name from color value
   static String getColorName(Color color) {
-    const Map<Color, String> colorNames = {
+    final Map<Color, String> colorNames = {
       Color(0xFF10B981): 'Emerald',
       Color(0xFF3B82F6): 'Blue',
       Color(0xFFF59E0B): 'Amber',
