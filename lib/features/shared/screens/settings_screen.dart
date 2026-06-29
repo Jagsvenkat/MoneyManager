@@ -1,5 +1,6 @@
-import 'dart:io';
+import 'dart:io' show File;
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:money_manager/config/app_colors.dart';
@@ -241,19 +242,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ]);
       }
 
-      // Save to temp file and share
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/SJsaver_Export_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx');
-      final bytes = excel.encode();
-      if (bytes == null) throw Exception('Failed to generate Excel file');
-      await file.writeAsBytes(bytes);
+      if (kIsWeb) {
+        // Web: trigger browser download via excel package
+        excel.save(fileName: 'SJsaver_Export_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx');
+      } else {
+        // Mobile: save to temp file and share
+        final dir = await getTemporaryDirectory();
+        final file = File('${dir.path}/SJsaver_Export_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx');
+        final bytes = excel.encode();
+        if (bytes == null) throw Exception('Failed to generate Excel file');
+        await file.writeAsBytes(bytes);
 
-      if (!context.mounted) return;
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        subject: 'SJsaver Export',
-        text: 'Money Manager data export',
-      );
+        if (!context.mounted) return;
+        await Share.shareXFiles(
+          [XFile(file.path)],
+          subject: 'SJsaver Export',
+          text: 'Money Manager data export',
+        );
+      }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
