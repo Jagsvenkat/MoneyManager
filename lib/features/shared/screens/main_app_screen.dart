@@ -7,9 +7,7 @@ import 'package:money_manager/providers/app_provider.dart';
 import 'package:money_manager/providers/auth_provider.dart';
 import 'package:money_manager/features/dashboard/screens/dashboard_screen.dart';
 import 'package:money_manager/features/expenses/screens/expenses_screen.dart';
-import 'package:money_manager/features/income/screens/income_screen.dart';
-import 'package:money_manager/features/loans/screens/loans_screen.dart';
-import 'package:money_manager/features/investments/screens/investments_screen.dart';
+import 'package:money_manager/features/shared/screens/other_entries_screen.dart';
 import 'package:money_manager/features/shared/screens/settings_screen.dart';
 
 class MainAppScreen extends StatefulWidget {
@@ -23,9 +21,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
   final List<Widget> _screens = const [
     DashboardScreen(),
     ExpensesScreen(),
-    IncomeScreen(),
-    LoansScreen(),
-    InvestmentsScreen(),
+    OtherEntriesScreen(),
     SettingsScreen(),
   ];
 
@@ -59,9 +55,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
           items: const [
             BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
             BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'Expenses'),
-            BottomNavigationBarItem(icon: Icon(Icons.trending_up), label: 'Income'),
-            BottomNavigationBarItem(icon: Icon(Icons.handshake), label: 'Loans'),
-            BottomNavigationBarItem(icon: Icon(Icons.show_chart), label: 'Invest'),
+            BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: 'More'),
             BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
           ],
         ),
@@ -123,8 +117,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
                     initialDate: selectedDate,
                     firstDate: DateTime(2000),
                     lastDate: DateTime.now(),
-                                        builder: (ctx, child) => child!,
-                   
+                    builder: (ctx, child) => child!,
                   );
                   if (picked != null) setModalState(() => selectedDate = picked);
                 },
@@ -242,6 +235,4 @@ class _MainAppScreenState extends State<MainAppScreen> {
       ),
     );
   }
-
-
 }
