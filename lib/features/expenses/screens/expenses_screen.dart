@@ -64,153 +64,159 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(ctx).viewInsets.bottom,
-          left: 24, right: 24, top: 24,
-        ),
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: StatefulBuilder(
-          builder: (ctx, setModalState) => Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(2)))),
-              const SizedBox(height: 20),
-              const Text('Add Expense', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-              const SizedBox(height: 20),
-              TextField(
-                controller: nameCtrl,
-                style: const TextStyle(color: AppColors.textPrimary),
-                decoration: InputDecoration(
-                  labelText: 'Description', labelStyle: const TextStyle(color: AppColors.textSecondary),
-                  filled: true, fillColor: AppColors.surfaceVariant,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: amountCtrl,
-                keyboardType: TextInputType.number,
-                style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                decoration: const InputDecoration(
-                  hintText: '0.00', hintStyle: TextStyle(color: Colors.grey),
-                  prefixText: '₹ ', prefixStyle: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                  border: InputBorder.none,
-                ),
-              ),
-              const SizedBox(height: 12),
-              GestureDetector(
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: selectedDate,
-                    firstDate: DateTime(2000),
-                    lastDate: DateTime.now(),
-                    builder: (ctx, child) => child!,
-                  );
-                  if (picked != null) setModalState(() => selectedDate = picked);
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceVariant,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.calendar_today, color: AppColors.textSecondary, size: 18),
-                      const SizedBox(width: 12),
-                      Text(
-                        DateFormat('dd MMM yyyy').format(selectedDate),
-                        style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: category,
-                dropdownColor: AppColors.surfaceVariant,
-                style: const TextStyle(color: AppColors.textPrimary),
-                decoration: InputDecoration(
-                  labelText: 'Category', labelStyle: const TextStyle(color: AppColors.textSecondary),
-                  filled: true, fillColor: AppColors.surfaceVariant,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                ),
-                items: _categories.map((c) => DropdownMenuItem(
-                  value: c['name'] as String,
-                  child: Text(c['name'] as String),
-                )).toList(),
-                onChanged: (v) => setModalState(() { category = v!; tag = null; }),
-              ),
-              if (category.isNotEmpty && _categories.any((c) => c['name'] == category && (c['tags'] as List?)?.isNotEmpty == true)) ...[
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: tag,
-                  dropdownColor: AppColors.surfaceVariant,
-                  style: const TextStyle(color: AppColors.textPrimary),
-                  decoration: InputDecoration(
-                    labelText: 'Tag', labelStyle: const TextStyle(color: AppColors.textSecondary),
-                    filled: true, fillColor: AppColors.surfaceVariant,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                  ),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('None')),
-                    ...((_categories.firstWhere((c) => c['name'] == category)['tags'] as List? ?? []) as List<String>).map((t) => DropdownMenuItem(value: t, child: Text(t))),
-                  ],
-                  onChanged: (v) => setModalState(() => tag = v),
-                ),
-              ],
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity, height: 56,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.error,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  onPressed: () async {
-                    final amount = double.tryParse(amountCtrl.text);
-                    if (nameCtrl.text.isEmpty || amount == null || amount <= 0) return;
-                    final authService = context.read<AuthProvider>().authService;
-                    if (authService == null) return;
-                    try {
-                      await authService.database.createExpense({
-                        'id': const Uuid().v4(),
-                        'description': nameCtrl.text,
-                        'amount': amount,
-                        'category': category,
-                        'tag': tag,
-                        'dateTime': selectedDate.toIso8601String(),
-                      });
-                      await _loadData();
-                      if (ctx.mounted) {
-                        Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Expense saved'), backgroundColor: AppColors.success),
-                        );
-                      }
-                    } catch (e) {
-                      if (ctx.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
-                        );
-                      }
-                    }
-                  },
-                  child: const Text('Save Expense', style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return Container(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom,
+            left: 24, right: 24, top: 24,
           ),
-        ),
-      ),
+          decoration: BoxDecoration(
+            color: cs.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: StatefulBuilder(
+            builder: (ctx, setModalState) {
+              final cs = Theme.of(ctx).colorScheme;
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(2)))),
+                  const SizedBox(height: 20),
+                  Text('Add Expense', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: cs.onSurface)),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: nameCtrl,
+                    style: TextStyle(color: cs.onSurface),
+                    decoration: InputDecoration(
+                      labelText: 'Description', labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                      filled: true, fillColor: cs.surfaceContainerHighest,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: amountCtrl,
+                    keyboardType: TextInputType.number,
+                    style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: cs.onSurface),
+                    decoration: InputDecoration(
+                      hintText: '0.00', hintStyle: TextStyle(color: Colors.grey),
+                      prefixText: '₹ ', prefixStyle: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: cs.onSurface),
+                      border: InputBorder.none,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  GestureDetector(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: selectedDate,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime.now(),
+                        builder: (ctx, child) => child!,
+                      );
+                      if (picked != null) setModalState(() => selectedDate = picked);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.calendar_today, color: cs.onSurfaceVariant, size: 18),
+                          const SizedBox(width: 12),
+                          Text(
+                            DateFormat('dd MMM yyyy').format(selectedDate),
+                            style: TextStyle(color: cs.onSurface, fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: category,
+                    dropdownColor: cs.surfaceContainerHighest,
+                    style: TextStyle(color: cs.onSurface),
+                    decoration: InputDecoration(
+                      labelText: 'Category', labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                      filled: true, fillColor: cs.surfaceContainerHighest,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                    ),
+                    items: _categories.map((c) => DropdownMenuItem(
+                      value: c['name'] as String,
+                      child: Text(c['name'] as String),
+                    )).toList(),
+                    onChanged: (v) => setModalState(() { category = v!; tag = null; }),
+                  ),
+                  if (category.isNotEmpty && _categories.any((c) => c['name'] == category && (c['tags'] as List?)?.isNotEmpty == true)) ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: tag,
+                      dropdownColor: cs.surfaceContainerHighest,
+                      style: TextStyle(color: cs.onSurface),
+                      decoration: InputDecoration(
+                        labelText: 'Tag', labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                        filled: true, fillColor: cs.surfaceContainerHighest,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                      ),
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('None')),
+                        ...((_categories.firstWhere((c) => c['name'] == category)['tags'] as List? ?? []) as List<String>).map((t) => DropdownMenuItem(value: t, child: Text(t))),
+                      ],
+                      onChanged: (v) => setModalState(() => tag = v),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity, height: 56,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: cs.error,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      onPressed: () async {
+                        final amount = double.tryParse(amountCtrl.text);
+                        if (nameCtrl.text.isEmpty || amount == null || amount <= 0) return;
+                        final authService = context.read<AuthProvider>().authService;
+                        if (authService == null) return;
+                        try {
+                          await authService.database.createExpense({
+                            'id': const Uuid().v4(),
+                            'description': nameCtrl.text,
+                            'amount': amount,
+                            'category': category,
+                            'tag': tag,
+                            'dateTime': selectedDate.toIso8601String(),
+                          });
+                          await _loadData();
+                          if (ctx.mounted) {
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Expense saved'), backgroundColor: AppColors.success),
+                            );
+                          }
+                        } catch (e) {
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error: $e'), backgroundColor: cs.error),
+                            );
+                          }
+                        }
+                      },
+                      child: const Text('Save Expense', style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -225,225 +231,263 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(ctx).viewInsets.bottom,
-          left: 24, right: 24, top: 24,
-        ),
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: StatefulBuilder(
-          builder: (ctx, setModalState) => Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(2)))),
-              const SizedBox(height: 20),
-              const Text('Edit Expense', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-              const SizedBox(height: 20),
-              TextField(
-                controller: nameCtrl,
-                style: const TextStyle(color: AppColors.textPrimary),
-                decoration: InputDecoration(
-                  labelText: 'Description', labelStyle: const TextStyle(color: AppColors.textSecondary),
-                  filled: true, fillColor: AppColors.surfaceVariant,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: amountCtrl,
-                keyboardType: TextInputType.number,
-                style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                decoration: const InputDecoration(
-                  hintText: '0.00', hintStyle: TextStyle(color: Colors.grey),
-                  prefixText: '₹ ', prefixStyle: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                  border: InputBorder.none,
-                ),
-              ),
-              const SizedBox(height: 12),
-              GestureDetector(
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: selectedDate,
-                    firstDate: DateTime(2000),
-                    lastDate: DateTime.now(),
-                    builder: (ctx, child) => child!,
-                  );
-                  if (picked != null) setModalState(() => selectedDate = picked);
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceVariant,
-                    borderRadius: BorderRadius.circular(14),
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return Container(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom,
+            left: 24, right: 24, top: 24,
+          ),
+          decoration: BoxDecoration(
+            color: cs.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: StatefulBuilder(
+            builder: (ctx, setModalState) {
+              final cs = Theme.of(ctx).colorScheme;
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(2)))),
+                  const SizedBox(height: 20),
+                  Text('Edit Expense', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: cs.onSurface)),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: nameCtrl,
+                    style: TextStyle(color: cs.onSurface),
+                    decoration: InputDecoration(
+                      labelText: 'Description', labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                      filled: true, fillColor: cs.surfaceContainerHighest,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                    ),
                   ),
-                  child: Row(
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: amountCtrl,
+                    keyboardType: TextInputType.number,
+                    style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: cs.onSurface),
+                    decoration: InputDecoration(
+                      hintText: '0.00', hintStyle: TextStyle(color: Colors.grey),
+                      prefixText: '₹ ', prefixStyle: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: cs.onSurface),
+                      border: InputBorder.none,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  GestureDetector(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: selectedDate,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime.now(),
+                        builder: (ctx, child) => child!,
+                      );
+                      if (picked != null) setModalState(() => selectedDate = picked);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.calendar_today, color: cs.onSurfaceVariant, size: 18),
+                          const SizedBox(width: 12),
+                          Text(
+                            DateFormat('dd MMM yyyy').format(selectedDate),
+                            style: TextStyle(color: cs.onSurface, fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: category,
+                    dropdownColor: cs.surfaceContainerHighest,
+                    style: TextStyle(color: cs.onSurface),
+                    decoration: InputDecoration(
+                      labelText: 'Category', labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                      filled: true, fillColor: cs.surfaceContainerHighest,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                    ),
+                    items: _categories.map((c) => DropdownMenuItem(
+                      value: c['name'] as String,
+                      child: Text(c['name'] as String),
+                    )).toList(),
+                    onChanged: (v) => setModalState(() { category = v!; tag = null; }),
+                  ),
+                  if (category.isNotEmpty && _categories.any((c) => c['name'] == category && (c['tags'] as List?)?.isNotEmpty == true)) ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: tag,
+                      dropdownColor: cs.surfaceContainerHighest,
+                      style: TextStyle(color: cs.onSurface),
+                      decoration: InputDecoration(
+                        labelText: 'Tag', labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                        filled: true, fillColor: cs.surfaceContainerHighest,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                      ),
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('None')),
+                        ...((_categories.firstWhere((c) => c['name'] == category)['tags'] as List? ?? []) as List<String>).map((t) => DropdownMenuItem(value: t, child: Text(t))),
+                      ],
+                      onChanged: (v) => setModalState(() => tag = v),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  Row(
                     children: [
-                      const Icon(Icons.calendar_today, color: AppColors.textSecondary, size: 18),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: cs.error,
+                            side: BorderSide(color: cs.error),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          icon: const Icon(Icons.delete_outline, size: 18),
+                          label: const Text('Delete'),
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _showDeleteConfirmDialog(expense['id'] as String);
+                          },
+                        ),
+                      ),
                       const SizedBox(width: 12),
-                      Text(
-                        DateFormat('dd MMM yyyy').format(selectedDate),
-                        style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: cs.error,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          onPressed: () async {
+                            final amount = double.tryParse(amountCtrl.text);
+                            if (nameCtrl.text.isEmpty || amount == null || amount <= 0) return;
+                            final authService = context.read<AuthProvider>().authService;
+                            if (authService == null) return;
+                            try {
+                              await authService.database.updateExpense(expense['id'] as String, {
+                                'description': nameCtrl.text,
+                                'amount': amount,
+                                'category': category,
+                                'tag': tag,
+                                'dateTime': selectedDate.toIso8601String(),
+                              });
+                              await _loadData();
+                              if (ctx.mounted) {
+                                Navigator.pop(ctx);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Expense updated'), backgroundColor: AppColors.success),
+                                );
+                              }
+                            } catch (e) {
+                              if (ctx.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Error: $e'), backgroundColor: cs.error),
+                                );
+                              }
+                            }
+                          },
+                          child: const Text('Update', style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
+                        ),
                       ),
                     ],
                   ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: category,
-                dropdownColor: AppColors.surfaceVariant,
-                style: const TextStyle(color: AppColors.textPrimary),
-                decoration: InputDecoration(
-                  labelText: 'Category', labelStyle: const TextStyle(color: AppColors.textSecondary),
-                  filled: true, fillColor: AppColors.surfaceVariant,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                ),
-                items: _categories.map((c) => DropdownMenuItem(
-                  value: c['name'] as String,
-                  child: Text(c['name'] as String),
-                )).toList(),
-                onChanged: (v) => setModalState(() { category = v!; tag = null; }),
-              ),
-              if (category.isNotEmpty && _categories.any((c) => c['name'] == category && (c['tags'] as List?)?.isNotEmpty == true)) ...[
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: tag,
-                  dropdownColor: AppColors.surfaceVariant,
-                  style: const TextStyle(color: AppColors.textPrimary),
-                  decoration: InputDecoration(
-                    labelText: 'Tag', labelStyle: const TextStyle(color: AppColors.textSecondary),
-                    filled: true, fillColor: AppColors.surfaceVariant,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                  ),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('None')),
-                    ...((_categories.firstWhere((c) => c['name'] == category)['tags'] as List? ?? []) as List<String>).map((t) => DropdownMenuItem(value: t, child: Text(t))),
-                  ],
-                  onChanged: (v) => setModalState(() => tag = v),
-                ),
-              ],
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.error,
-                        side: const BorderSide(color: AppColors.error),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      icon: const Icon(Icons.delete_outline, size: 18),
-                      label: const Text('Delete'),
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _showDeleteConfirmDialog(expense['id'] as String);
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.error,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      onPressed: () async {
-                        final amount = double.tryParse(amountCtrl.text);
-                        if (nameCtrl.text.isEmpty || amount == null || amount <= 0) return;
-                        final authService = context.read<AuthProvider>().authService;
-                        if (authService == null) return;
-                        try {
-                          await authService.database.updateExpense(expense['id'] as String, {
-                            'description': nameCtrl.text,
-                            'amount': amount,
-                            'category': category,
-                            'tag': tag,
-                            'dateTime': selectedDate.toIso8601String(),
-                          });
-                          await _loadData();
-                          if (ctx.mounted) {
-                            Navigator.pop(ctx);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Expense updated'), backgroundColor: AppColors.success),
-                            );
-                          }
-                        } catch (e) {
-                          if (ctx.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
-                            );
-                          }
-                        }
-                      },
-                      child: const Text('Update', style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
+                  const SizedBox(height: 16),
                 ],
-              ),
-              const SizedBox(height: 16),
-            ],
+              );
+            },
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
   void _showDeleteConfirmDialog(String id) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: const Text('Delete Expense?', style: TextStyle(color: AppColors.textPrimary)),
-        content: const Text('This action cannot be undone.', style: TextStyle(color: AppColors.textSecondary)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final authService = context.read<AuthProvider>().authService;
-              if (authService == null) return;
-              try {
-                await authService.database.deleteExpense(id);
-                await _loadData();
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Expense deleted'), backgroundColor: AppColors.success),
-                  );
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return AlertDialog(
+          backgroundColor: cs.surface,
+          title: Text('Delete Expense?', style: TextStyle(color: cs.onSurface)),
+          content: Text('This action cannot be undone.', style: TextStyle(color: cs.onSurfaceVariant)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                final authService = context.read<AuthProvider>().authService;
+                if (authService == null) return;
+                try {
+                  await authService.database.deleteExpense(id);
+                  await _loadData();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Expense deleted'), backgroundColor: AppColors.success),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: $e'), backgroundColor: cs.error),
+                    );
+                  }
                 }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
-                  );
-                }
-              }
-            },
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+              },
+              style: TextButton.styleFrom(foregroundColor: cs.error),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
     );
+  }
+
+  Future<void> _duplicateExpense(Map<String, dynamic> exp) async {
+    final authService = context.read<AuthProvider>().authService;
+    if (authService == null) return;
+    try {
+      await authService.database.createExpense({
+        'id': const Uuid().v4(),
+        'description': exp['description'],
+        'amount': exp['amount'],
+        'category': exp['category'],
+        'tag': exp['tag'],
+        'dateTime': DateTime.now().toIso8601String(),
+      });
+      await _loadData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Expense duplicated'), backgroundColor: AppColors.success),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Theme.of(context).colorScheme.error),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final bg = Theme.of(context).scaffoldBackgroundColor;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: bg,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Expenses', style: TextStyle(color: AppColors.textPrimary)),
+        title: Text('Expenses', style: TextStyle(color: cs.onSurface)),
         actions: [
-          IconButton(icon: const Icon(Icons.add, color: AppColors.primary), onPressed: _showAddExpenseDialog),
+          IconButton(icon: Icon(Icons.add, color: cs.primary), onPressed: _showAddExpenseDialog),
         ],
       ),
       body: Column(
@@ -468,7 +512,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
         children: [
           Icon(Icons.receipt_long, size: 64, color: AppColors.textTertiary),
           const SizedBox(height: 16),
-          const Text('No expenses yet', style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
+          Text('No expenses yet', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 16)),
           const SizedBox(height: 8),
           const Text('Tap + to add your first expense', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
         ],
@@ -479,7 +523,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   Widget _buildExpenseList() {
     return RefreshIndicator(
       onRefresh: _loadData,
-      color: AppColors.primary,
+      color: Theme.of(context).colorScheme.primary,
       child: ListView.builder(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: _expenses.length,
@@ -496,11 +540,12 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(12),
             ),
             child: GestureDetector(
               onTap: () => _showEditExpenseDialog(exp),
+              onLongPress: () => _duplicateExpense(exp),
               child: Row(
                 children: [
                   Container(
@@ -516,7 +561,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(exp['description'] ?? 'Expense', style: const TextStyle(color: AppColors.textPrimary, fontSize: 14)),
+                        Text(exp['description'] ?? 'Expense', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 14)),
                         Row(
                           children: [
                             Text(cat, style: const TextStyle(color: AppColors.textTertiary, fontSize: 11)),
@@ -540,7 +585,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       ],
                     ),
                   ),
-                  Text('₹${(exp['amount'] as num?)?.toStringAsFixed(2) ?? '0.00'}', style: const TextStyle(color: AppColors.error, fontSize: 15, fontWeight: FontWeight.bold)),
+                  Text('₹${(exp['amount'] as num?)?.toStringAsFixed(2) ?? '0.00'}', style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 15, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -555,21 +600,21 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         children: [
           TextField(
             controller: _searchController,
-            style: const TextStyle(color: AppColors.textPrimary),
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
             decoration: InputDecoration(
               hintText: 'Search expenses...',
               hintStyle: const TextStyle(color: AppColors.textTertiary),
-              prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
+              prefixIcon: Icon(Icons.search, color: Theme.of(context).colorScheme.onSurfaceVariant),
               border: InputBorder.none,
               filled: true,
-              fillColor: AppColors.surfaceVariant,
+              fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -577,7 +622,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppColors.primary),
+                borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
               ),
             ),
             onChanged: (_) => _loadData(),
@@ -612,16 +657,16 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary.withValues(alpha: 0.2) : AppColors.surfaceVariant,
+          color: isSelected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.2) : Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isSelected ? AppColors.primary : Colors.transparent),
+          border: Border.all(color: isSelected ? Theme.of(context).colorScheme.primary : Colors.transparent),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: isSelected ? AppColors.primary : AppColors.textSecondary),
+            Icon(icon, size: 14, color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant),
             const SizedBox(width: 6),
-            Text(label, style: TextStyle(fontSize: 12, color: isSelected ? AppColors.primary : AppColors.textSecondary)),
+            Text(label, style: TextStyle(fontSize: 12, color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant)),
           ],
         ),
       ),

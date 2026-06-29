@@ -16,6 +16,7 @@ class LocalDatabaseService {
   static const String _categoriesBox = 'categories';
   static const String _syncQueue = 'sync_queue';
   static const String _conflictsBox = 'conflicts';
+  static const String _settingsBox = 'app_settings';
 
   late Box<String> _expensesDb;
   late Box<String> _incomeDb;
@@ -25,6 +26,7 @@ class LocalDatabaseService {
   late Box<String> _categoriesDb;
   late Box<Map> _syncQueueDb;
   late Box<String> _conflictsDb;
+  late Box<String> _appSettingsDb;
 
   late Uint8List _wrappingKey;
   late String _userId;
@@ -49,6 +51,7 @@ class LocalDatabaseService {
     _categoriesDb = await Hive.openBox<String>(_categoriesBox);
     _syncQueueDb = await Hive.openBox<Map>(_syncQueue);
     _conflictsDb = await Hive.openBox<String>(_conflictsBox);
+    _appSettingsDb = await Hive.openBox<String>(_settingsBox);
 
     await seedCategoriesIfEmpty();
   }
@@ -87,6 +90,7 @@ class LocalDatabaseService {
     DateTime? endDate,
     double? minAmount,
     double? maxAmount,
+    String? searchText,
   }) async {
     final expenses = <Map<String, dynamic>>[];
 
@@ -122,6 +126,12 @@ class LocalDatabaseService {
         }
         if (maxAmount != null && (expense['amount'] as double) > maxAmount) {
           continue;
+        }
+        if (searchText != null && searchText.isNotEmpty) {
+          final desc = (expense['description'] as String? ?? '').toLowerCase();
+          if (!desc.contains(searchText.toLowerCase())) {
+            continue;
+          }
         }
 
         expenses.add(expense);
@@ -574,6 +584,36 @@ class LocalDatabaseService {
     }
   }
 
+  // ==== App Settings (budget, preferences) ====
+
+  Future<double> getMonthlyBudget() async {
+    final val = _appSettingsDb.get('monthly_budget');
+    if (val == null) return 0;
+    try {
+      final envelope = EncryptionEnvelope.fromJson(
+        jsonDecode(val) as Map<String, dynamic>,
+      );
+      final data = await EnvelopeEncryption.decrypt(
+        envelope: envelope,
+        wrappingKey: _wrappingKey,
+      );
+      return (data['amount'] as num?)?.toDouble() ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  Future<void> setMonthlyBudget(double amount) async {
+    final envelope = await EnvelopeEncryption.encrypt(
+      recordId: 'monthly_budget',
+      deviceId: _deviceId,
+      payload: {'amount': amount},
+      wrappingKey: _wrappingKey,
+      metadata: {'type': 'settings', 'userId': _userId},
+    );
+    await _appSettingsDb.put('monthly_budget', jsonEncode(envelope.toJson()));
+  }
+
   // ==== Cleanup ====
 
   Future<void> deleteAll() async {
@@ -585,6 +625,7 @@ class LocalDatabaseService {
     await _categoriesDb.clear();
     await _syncQueueDb.clear();
     await _conflictsDb.clear();
+    await _appSettingsDb.clear();
   }
 
   Future<void> close() async {
@@ -596,5 +637,6 @@ class LocalDatabaseService {
     await _categoriesDb.close();
     await _syncQueueDb.close();
     await _conflictsDb.close();
+    await _appSettingsDb.close();
   }
 }

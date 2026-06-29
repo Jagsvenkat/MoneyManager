@@ -127,6 +127,7 @@ class MockLocalDatabaseService extends LocalDatabaseService {
     DateTime? endDate,
     double? minAmount,
     double? maxAmount,
+    String? searchText,
   }) async {
     return [
       {

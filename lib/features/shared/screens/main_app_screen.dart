@@ -28,26 +28,28 @@ class _MainAppScreenState extends State<MainAppScreen> {
   @override
   Widget build(BuildContext context) {
     final appProvider = context.watch<AppProvider>();
+    final cs = Theme.of(context).colorScheme;
+    final bg = Theme.of(context).scaffoldBackgroundColor;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: bg,
       body: _screens[appProvider.currentTabIndex],
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddExpenseDialog,
-        backgroundColor: AppColors.primary,
+        backgroundColor: cs.primary,
         child: const Icon(Icons.add, color: Colors.black),
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           border: Border(
-            top: BorderSide(color: AppColors.surfaceVariant.withValues(alpha: 0.3)),
+            top: BorderSide(color: cs.surfaceContainerHighest.withValues(alpha: 0.3)),
           ),
         ),
         child: BottomNavigationBar(
           currentIndex: appProvider.currentTabIndex,
           onTap: (index) => appProvider.setTabIndex(index),
-          backgroundColor: AppColors.surface,
-          selectedItemColor: AppColors.primary,
+          backgroundColor: cs.surface,
+          selectedItemColor: cs.primary,
           unselectedItemColor: AppColors.textTertiary,
           type: BottomNavigationBarType.fixed,
           selectedFontSize: 11,
@@ -67,48 +69,78 @@ class _MainAppScreenState extends State<MainAppScreen> {
     final nameCtrl = TextEditingController();
     final amountCtrl = TextEditingController();
     DateTime selectedDate = DateTime.now();
-    String category = '';
-    String? selectedTag;
     final authService = context.read<AuthProvider>().authService;
     List<Map<String, dynamic>> categories = [];
     if (authService != null) {
       categories = await authService.database.listCategories(type: 'expense');
     }
+    String category = categories.isNotEmpty ? (categories.first['name'] as String) : '';
+    String? selectedTag;
+    List<double> _recentAmounts = [];
+    bool _initLoaded = false;
 
     if (!context.mounted) return;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(ctx).viewInsets.bottom,
-          left: 24, right: 24, top: 24,
-        ),
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: StatefulBuilder(
-          builder: (ctx, setModalState) => Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(2)))),
-              const SizedBox(height: 20),
-              const Text('Add Expense', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-              const SizedBox(height: 20),
-              TextField(
-                controller: amountCtrl,
-                keyboardType: TextInputType.number,
-                style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppColors.error),
-                decoration: const InputDecoration(
-                  hintText: '0.00', hintStyle: TextStyle(color: Colors.grey),
-                  prefixText: '₹ ', prefixStyle: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppColors.error),
-                  border: InputBorder.none,
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return Container(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom,
+            left: 24, right: 24, top: 24,
+          ),
+          decoration: BoxDecoration(
+            color: cs.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: StatefulBuilder(
+            builder: (ctx, setModalState) {
+              Future<void> _loadRecentAmounts(String cat) async {
+                final srv = context.read<AuthProvider>().authService;
+                if (srv == null) return;
+                final exps = await srv.database.listExpenses(categoryFilter: cat);
+                final amounts = exps.map((e) => (e['amount'] as num?)?.toDouble() ?? 0).toSet().take(3).toList();
+                setModalState(() => _recentAmounts = amounts.cast<double>());
+              }
+              if (!_initLoaded) {
+                _initLoaded = true;
+                _loadRecentAmounts(category);
+              }
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(2)))),
+                const SizedBox(height: 20),
+                Text('Add Expense', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: cs.onSurface)),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: amountCtrl,
+                  keyboardType: TextInputType.number,
+                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: cs.error),
+                  decoration: InputDecoration(
+                    hintText: '0.00', hintStyle: TextStyle(color: Colors.grey),
+                    prefixText: '₹ ', prefixStyle: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: cs.error),
+                    border: InputBorder.none,
+                  ),
                 ),
-              ),
-              const Divider(color: AppColors.surfaceVariant),
+                if (_recentAmounts.isNotEmpty)
+                  Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Wrap(
+                      spacing: 8,
+                      children: _recentAmounts.map((amt) => ActionChip(
+                        label: Text('₹${amt.toStringAsFixed(0)}', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                        backgroundColor: cs.surfaceContainerHighest,
+                        onPressed: () {
+                          setModalState(() { amountCtrl.text = amt.toStringAsFixed(2); });
+                        },
+                      )).toList(),
+                    ),
+                  ),
+                Divider(color: cs.surfaceContainerHighest),
               const SizedBox(height: 12),
               GestureDetector(
                 onTap: () async {
@@ -124,16 +156,16 @@ class _MainAppScreenState extends State<MainAppScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceVariant,
+                    color: cs.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.calendar_today, color: AppColors.textSecondary, size: 18),
+                      Icon(Icons.calendar_today, color: cs.onSurfaceVariant, size: 18),
                       const SizedBox(width: 12),
                       Text(
                         DateFormat('dd MMM yyyy').format(selectedDate),
-                        style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+                        style: TextStyle(color: cs.onSurface, fontSize: 14),
                       ),
                     ],
                   ),
@@ -142,21 +174,21 @@ class _MainAppScreenState extends State<MainAppScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: nameCtrl,
-                style: const TextStyle(color: AppColors.textPrimary),
+                style: TextStyle(color: cs.onSurface),
                 decoration: InputDecoration(
-                  labelText: 'Description', labelStyle: const TextStyle(color: AppColors.textSecondary),
-                  filled: true, fillColor: AppColors.surfaceVariant,
+                  labelText: 'Description', labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                  filled: true, fillColor: cs.surfaceContainerHighest,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
                 ),
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                initialValue: category,
-                dropdownColor: AppColors.surfaceVariant,
-                style: const TextStyle(color: AppColors.textPrimary),
+                value: category.isEmpty ? null : category,
+                dropdownColor: cs.surfaceContainerHighest,
+                style: TextStyle(color: cs.onSurface),
                 decoration: InputDecoration(
-                  labelText: 'Category', labelStyle: const TextStyle(color: AppColors.textSecondary),
-                  filled: true, fillColor: AppColors.surfaceVariant,
+                  labelText: 'Category', labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                  filled: true, fillColor: cs.surfaceContainerHighest,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
                 ),
                 items: categories.isEmpty
@@ -167,17 +199,18 @@ class _MainAppScreenState extends State<MainAppScreen> {
                 onChanged: (v) => setModalState(() {
                   category = v!;
                   selectedTag = null;
+                  _loadRecentAmounts(category);
                 }),
               ),
               if (category.isNotEmpty && categories.any((c) => c['name'] == category && (c['tags'] as List?)?.isNotEmpty == true)) ...[
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  initialValue: selectedTag,
-                  dropdownColor: AppColors.surfaceVariant,
-                  style: const TextStyle(color: AppColors.textPrimary),
+                  value: selectedTag,
+                  dropdownColor: cs.surfaceContainerHighest,
+                  style: TextStyle(color: cs.onSurface),
                   decoration: InputDecoration(
-                    labelText: 'Tag', labelStyle: const TextStyle(color: AppColors.textSecondary),
-                    filled: true, fillColor: AppColors.surfaceVariant,
+                    labelText: 'Tag', labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                    filled: true, fillColor: cs.surfaceContainerHighest,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
                   ),
                   items: [
@@ -194,7 +227,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
                 width: double.infinity, height: 56,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.error,
+                    backgroundColor: cs.error,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                   onPressed: () async {
@@ -220,7 +253,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
                     } catch (e) {
                       if (ctx.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                          SnackBar(content: Text('Error: $e'), backgroundColor: cs.error),
                         );
                       }
                     }
@@ -230,9 +263,11 @@ class _MainAppScreenState extends State<MainAppScreen> {
               ),
               const SizedBox(height: 16),
             ],
-          ),
+          );
+          },
         ),
-      ),
+      );
+    },
     );
   }
 }

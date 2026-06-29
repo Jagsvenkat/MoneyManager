@@ -59,15 +59,17 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final bg = Theme.of(context).scaffoldBackgroundColor;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: bg,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('More', style: TextStyle(color: AppColors.textPrimary)),
+        title: Text('More', style: TextStyle(color: cs.onSurface)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add, color: AppColors.primary),
+            icon: Icon(Icons.add, color: cs.primary),
             onPressed: () {
               switch (_selectedSegment) {
                 case 0: _showAddIncomeDialog();
@@ -97,15 +99,15 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                       style: ButtonStyle(
                         backgroundColor: WidgetStateProperty.resolveWith((states) {
                           if (states.contains(WidgetState.selected)) {
-                            return AppColors.primaryContainer;
+                            return cs.primaryContainer;
                           }
-                          return AppColors.surfaceVariant;
+                          return cs.surfaceContainerHighest;
                         }),
                         foregroundColor: WidgetStateProperty.resolveWith((states) {
                           if (states.contains(WidgetState.selected)) {
-                            return AppColors.onPrimaryContainer;
+                            return cs.onPrimaryContainer;
                           }
-                          return AppColors.onSurfaceVariant;
+                          return cs.onSurfaceVariant;
                         }),
                       ),
                     ),
@@ -129,6 +131,8 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
   // ========== INCOME ==========
 
   Widget _buildIncomeSection() {
+    final cs = Theme.of(context).colorScheme;
+    final bg = Theme.of(context).scaffoldBackgroundColor;
     if (_incomes.isEmpty) {
       return Center(
         child: Column(
@@ -136,7 +140,7 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
           children: [
             Icon(Icons.trending_up, size: 64, color: AppColors.textTertiary),
             const SizedBox(height: 16),
-            const Text('No income recorded', style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
+            Text('No income recorded', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 16)),
             const SizedBox(height: 8),
             const Text('Track your salary, freelance, and other income', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
             const SizedBox(height: 24),
@@ -146,7 +150,7 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
               label: const Text('Add Income'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.success,
-                foregroundColor: AppColors.background,
+                foregroundColor: bg,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
@@ -156,7 +160,7 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
     }
     return RefreshIndicator(
       onRefresh: _loadAll,
-      color: AppColors.primary,
+      color: cs.primary,
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         itemCount: _incomes.length,
@@ -167,7 +171,7 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: cs.surface,
               borderRadius: BorderRadius.circular(12),
             ),
             child: GestureDetector(
@@ -187,7 +191,7 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(income['source'] ?? 'Income', style: const TextStyle(color: AppColors.textPrimary, fontSize: 15)),
+                        Text(income['source'] ?? 'Income', style: TextStyle(color: cs.onSurface, fontSize: 15)),
                         Row(
                           children: [
                             Text(income['frequency'] ?? 'one-time', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
@@ -224,14 +228,16 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return Container(
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(ctx).viewInsets.bottom,
           left: 24, right: 24, top: 24,
         ),
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: StatefulBuilder(
           builder: (ctx, setModalState) => Column(
@@ -240,7 +246,7 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
             children: [
               Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(2)))),
               const SizedBox(height: 20),
-              Text(isEdit ? 'Edit Income' : 'Add Income', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+              Text(isEdit ? 'Edit Income' : 'Add Income', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: cs.onSurface)),
               const SizedBox(height: 20),
               TextField(
                 controller: amountCtrl,
@@ -252,7 +258,7 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                   border: InputBorder.none,
                 ),
               ),
-              const Divider(color: AppColors.surfaceVariant),
+              Divider(color: cs.surfaceContainerHighest),
               const SizedBox(height: 12),
               GestureDetector(
                 onTap: () async {
@@ -268,16 +274,16 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceVariant,
+                    color: cs.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.calendar_today, color: AppColors.textSecondary, size: 18),
+                      Icon(Icons.calendar_today, color: cs.onSurfaceVariant, size: 18),
                       const SizedBox(width: 12),
                       Text(
                         DateFormat('dd MMM yyyy').format(selectedDate),
-                        style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+                        style: TextStyle(color: cs.onSurface, fontSize: 14),
                       ),
                     ],
                   ),
@@ -286,23 +292,23 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: sourceCtrl,
-                style: const TextStyle(color: AppColors.textPrimary),
+                style: TextStyle(color: cs.onSurface),
                 decoration: InputDecoration(
                   labelText: 'Source (Salary, Freelance, etc.)',
-                  labelStyle: const TextStyle(color: AppColors.textSecondary),
-                  filled: true, fillColor: AppColors.surfaceVariant,
+                  labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                  filled: true, fillColor: cs.surfaceContainerHighest,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
                 ),
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                initialValue: frequency,
-                dropdownColor: AppColors.surfaceVariant,
-                style: const TextStyle(color: AppColors.textPrimary),
+                value: frequency,
+                dropdownColor: cs.surfaceContainerHighest,
+                style: TextStyle(color: cs.onSurface),
                 decoration: InputDecoration(
                   labelText: 'Frequency',
-                  labelStyle: const TextStyle(color: AppColors.textSecondary),
-                  filled: true, fillColor: AppColors.surfaceVariant,
+                  labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                  filled: true, fillColor: cs.surfaceContainerHighest,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
                 ),
                 items: const [
@@ -319,8 +325,8 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                     Expanded(
                       child: OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.error,
-                          side: const BorderSide(color: AppColors.error),
+                          foregroundColor: cs.error,
+                          side: BorderSide(color: cs.error),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           padding: const EdgeInsets.symmetric(vertical: 16),
                         ),
@@ -369,7 +375,7 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                         } catch (e) {
                           if (ctx.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                              SnackBar(content: Text('Error: $e'), backgroundColor: cs.error),
                             );
                           }
                         }
@@ -383,17 +389,20 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
             ],
           ),
         ),
-      ),
-    );
+      );
+    },
+  );
   }
 
   void _showDeleteIncomeConfirm(String id) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: const Text('Delete Income?', style: TextStyle(color: AppColors.textPrimary)),
-        content: const Text('This action cannot be undone.', style: TextStyle(color: AppColors.textSecondary)),
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return AlertDialog(
+        backgroundColor: cs.surface,
+        title: Text('Delete Income?', style: TextStyle(color: cs.onSurface)),
+        content: Text('This action cannot be undone.', style: TextStyle(color: cs.onSurfaceVariant)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           TextButton(
@@ -412,22 +421,25 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                    SnackBar(content: Text('Error: $e'), backgroundColor: cs.error),
                   );
                 }
               }
             },
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            style: TextButton.styleFrom(foregroundColor: cs.error),
             child: const Text('Delete'),
           ),
         ],
-      ),
+      );
+      },
     );
   }
 
   // ========== LOANS ==========
 
   Widget _buildLoanSection() {
+    final cs = Theme.of(context).colorScheme;
+    final bg = Theme.of(context).scaffoldBackgroundColor;
     if (_loans.isEmpty) {
       return Center(
         child: Column(
@@ -435,7 +447,7 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
           children: [
             Icon(Icons.handshake, size: 64, color: AppColors.textTertiary),
             const SizedBox(height: 16),
-            const Text('No loans tracked', style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
+            Text('No loans tracked', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 16)),
             const SizedBox(height: 8),
             const Text('Track money you lent or borrowed', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
             const SizedBox(height: 24),
@@ -445,7 +457,7 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
               label: const Text('Add Loan'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.warning,
-                foregroundColor: AppColors.background,
+                foregroundColor: bg,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
@@ -455,7 +467,7 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
     }
     return RefreshIndicator(
       onRefresh: _loadAll,
-      color: AppColors.primary,
+      color: cs.primary,
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         itemCount: _loans.length,
@@ -467,7 +479,7 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: cs.surface,
               borderRadius: BorderRadius.circular(12),
             ),
             child: GestureDetector(
@@ -487,7 +499,7 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(loan['personName'] ?? 'Unknown', style: const TextStyle(color: AppColors.textPrimary, fontSize: 15)),
+                        Text(loan['personName'] ?? 'Unknown', style: TextStyle(color: cs.onSurface, fontSize: 15)),
                         Row(
                           children: [
                             Text(isToReceive ? 'To Receive' : 'To Pay', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
@@ -524,14 +536,16 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return Container(
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(ctx).viewInsets.bottom,
           left: 24, right: 24, top: 24,
         ),
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: StatefulBuilder(
           builder: (ctx, setModalState) => Column(
@@ -540,7 +554,7 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
             children: [
               Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(2)))),
               const SizedBox(height: 20),
-              Text(isEdit ? 'Edit Loan' : 'Add Loan', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+              Text(isEdit ? 'Edit Loan' : 'Add Loan', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: cs.onSurface)),
               const SizedBox(height: 20),
               Row(
                 children: ['To Receive', 'To Pay'].map((type) {
@@ -554,10 +568,10 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                         decoration: BoxDecoration(
                           color: selected ? AppColors.warning.withValues(alpha: 0.2) : Colors.transparent,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: selected ? AppColors.warning : AppColors.surfaceVariant),
+                          border: Border.all(color: selected ? AppColors.warning : cs.surfaceContainerHighest),
                         ),
                         child: Center(
-                          child: Text(type, style: TextStyle(color: selected ? AppColors.warning : AppColors.textSecondary, fontWeight: selected ? FontWeight.bold : FontWeight.normal)),
+                          child: Text(type, style: TextStyle(color: selected ? AppColors.warning : cs.onSurfaceVariant, fontWeight: selected ? FontWeight.bold : FontWeight.normal)),
                         ),
                       ),
                     ),
@@ -579,16 +593,16 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceVariant,
+                    color: cs.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.calendar_today, color: AppColors.textSecondary, size: 18),
+                      Icon(Icons.calendar_today, color: cs.onSurfaceVariant, size: 18),
                       const SizedBox(width: 12),
                       Text(
                         DateFormat('dd MMM yyyy').format(selectedDate),
-                        style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+                        style: TextStyle(color: cs.onSurface, fontSize: 14),
                       ),
                     ],
                   ),
@@ -597,11 +611,11 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: personCtrl,
-                style: const TextStyle(color: AppColors.textPrimary),
+                style: TextStyle(color: cs.onSurface),
                 decoration: InputDecoration(
                   labelText: 'Person Name',
-                  labelStyle: const TextStyle(color: AppColors.textSecondary),
-                  filled: true, fillColor: AppColors.surfaceVariant,
+                  labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                  filled: true, fillColor: cs.surfaceContainerHighest,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
                 ),
               ),
@@ -609,10 +623,10 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
               TextField(
                 controller: amountCtrl,
                 keyboardType: TextInputType.number,
-                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                decoration: const InputDecoration(
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: cs.onSurface),
+                decoration: InputDecoration(
                   hintText: 'Amount', hintStyle: TextStyle(color: Colors.grey),
-                  prefixText: '₹ ', prefixStyle: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  prefixText: '₹ ', prefixStyle: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: cs.onSurface),
                   border: InputBorder.none,
                 ),
               ),
@@ -623,8 +637,8 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                     Expanded(
                       child: OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.error,
-                          side: const BorderSide(color: AppColors.error),
+                          foregroundColor: cs.error,
+                          side: BorderSide(color: cs.error),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           padding: const EdgeInsets.symmetric(vertical: 16),
                         ),
@@ -673,7 +687,7 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                         } catch (e) {
                           if (ctx.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                              SnackBar(content: Text('Error: $e'), backgroundColor: cs.error),
                             );
                           }
                         }
@@ -687,17 +701,20 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
             ],
           ),
         ),
-      ),
-    );
+      );
+    },
+  );
   }
 
   void _showDeleteLoanConfirm(String id) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: const Text('Delete Loan?', style: TextStyle(color: AppColors.textPrimary)),
-        content: const Text('This action cannot be undone.', style: TextStyle(color: AppColors.textSecondary)),
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return AlertDialog(
+        backgroundColor: cs.surface,
+        title: Text('Delete Loan?', style: TextStyle(color: cs.onSurface)),
+        content: Text('This action cannot be undone.', style: TextStyle(color: cs.onSurfaceVariant)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           TextButton(
@@ -716,22 +733,25 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                    SnackBar(content: Text('Error: $e'), backgroundColor: cs.error),
                   );
                 }
               }
             },
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            style: TextButton.styleFrom(foregroundColor: cs.error),
             child: const Text('Delete'),
           ),
         ],
-      ),
+      );
+      },
     );
   }
 
   // ========== INVESTMENTS ==========
 
   Widget _buildInvestmentSection() {
+    final cs = Theme.of(context).colorScheme;
+    final bg = Theme.of(context).scaffoldBackgroundColor;
     if (_investments.isEmpty) {
       return Center(
         child: Column(
@@ -739,7 +759,7 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
           children: [
             Icon(Icons.show_chart, size: 64, color: AppColors.textTertiary),
             const SizedBox(height: 16),
-            const Text('No investments tracked', style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
+            Text('No investments tracked', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 16)),
             const SizedBox(height: 8),
             const Text('Track stocks, mutual funds, and other investments', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
             const SizedBox(height: 24),
@@ -748,8 +768,8 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
               icon: const Icon(Icons.add),
               label: const Text('Add Investment'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.tertiary,
-                foregroundColor: AppColors.background,
+                backgroundColor: cs.tertiary,
+                foregroundColor: bg,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
@@ -759,7 +779,7 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
     }
     return RefreshIndicator(
       onRefresh: _loadAll,
-      color: AppColors.primary,
+      color: cs.primary,
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         itemCount: _investments.length,
@@ -773,7 +793,7 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: cs.surface,
               borderRadius: BorderRadius.circular(12),
             ),
             child: GestureDetector(
@@ -783,17 +803,17 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: AppColors.tertiary.withValues(alpha: 0.2),
+                      color: cs.tertiary.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.show_chart, color: AppColors.tertiary, size: 20),
+                    child: Icon(Icons.show_chart, color: cs.tertiary, size: 20),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(inv['name'] ?? 'Investment', style: const TextStyle(color: AppColors.textPrimary, fontSize: 15)),
+                        Text(inv['name'] ?? 'Investment', style: TextStyle(color: cs.onSurface, fontSize: 15)),
                         Row(
                           children: [
                             Text('${inv['units']} units @ ₹${inv['pricePerUnit']}', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
@@ -806,7 +826,7 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                       ],
                     ),
                   ),
-                  Text('₹${totalValue.toStringAsFixed(2)}', style: const TextStyle(color: AppColors.tertiary, fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text('₹${totalValue.toStringAsFixed(2)}', style: TextStyle(color: cs.tertiary, fontSize: 16, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -831,14 +851,16 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return Container(
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(ctx).viewInsets.bottom,
           left: 24, right: 24, top: 24,
         ),
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: StatefulBuilder(
           builder: (ctx, setModalState) => Column(
@@ -847,7 +869,7 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
             children: [
               Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(2)))),
               const SizedBox(height: 20),
-              Text(isEdit ? 'Edit Investment' : 'Add Investment', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+              Text(isEdit ? 'Edit Investment' : 'Add Investment', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: cs.onSurface)),
               const SizedBox(height: 20),
               GestureDetector(
                 onTap: () async {
@@ -863,16 +885,16 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceVariant,
+                    color: cs.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.calendar_today, color: AppColors.textSecondary, size: 18),
+                      Icon(Icons.calendar_today, color: cs.onSurfaceVariant, size: 18),
                       const SizedBox(width: 12),
                       Text(
                         DateFormat('dd MMM yyyy').format(selectedDate),
-                        style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+                        style: TextStyle(color: cs.onSurface, fontSize: 14),
                       ),
                     ],
                   ),
@@ -881,23 +903,23 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: nameCtrl,
-                style: const TextStyle(color: AppColors.textPrimary),
+                style: TextStyle(color: cs.onSurface),
                 decoration: InputDecoration(
                   labelText: 'Instrument Name',
-                  labelStyle: const TextStyle(color: AppColors.textSecondary),
-                  filled: true, fillColor: AppColors.surfaceVariant,
+                  labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                  filled: true, fillColor: cs.surfaceContainerHighest,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
                 ),
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                initialValue: type,
-                dropdownColor: AppColors.surfaceVariant,
-                style: const TextStyle(color: AppColors.textPrimary),
+                value: type,
+                dropdownColor: cs.surfaceContainerHighest,
+                style: TextStyle(color: cs.onSurface),
                 decoration: InputDecoration(
                   labelText: 'Type',
-                  labelStyle: const TextStyle(color: AppColors.textSecondary),
-                  filled: true, fillColor: AppColors.surfaceVariant,
+                  labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                  filled: true, fillColor: cs.surfaceContainerHighest,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
                 ),
                 items: const [
@@ -915,11 +937,11 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                     child: TextField(
                       controller: unitsCtrl,
                       keyboardType: TextInputType.number,
-                      style: const TextStyle(color: AppColors.textPrimary),
+                      style: TextStyle(color: cs.onSurface),
                       decoration: InputDecoration(
                         labelText: 'Units',
-                        labelStyle: const TextStyle(color: AppColors.textSecondary),
-                        filled: true, fillColor: AppColors.surfaceVariant,
+                        labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                        filled: true, fillColor: cs.surfaceContainerHighest,
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
                       ),
                     ),
@@ -929,11 +951,11 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                     child: TextField(
                       controller: priceCtrl,
                       keyboardType: TextInputType.number,
-                      style: const TextStyle(color: AppColors.textPrimary),
+                      style: TextStyle(color: cs.onSurface),
                       decoration: InputDecoration(
                         labelText: 'Price/Unit',
-                        labelStyle: const TextStyle(color: AppColors.textSecondary),
-                        filled: true, fillColor: AppColors.surfaceVariant,
+                        labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                        filled: true, fillColor: cs.surfaceContainerHighest,
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
                       ),
                     ),
@@ -947,8 +969,8 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                     Expanded(
                       child: OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.error,
-                          side: const BorderSide(color: AppColors.error),
+                          foregroundColor: cs.error,
+                          side: BorderSide(color: cs.error),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           padding: const EdgeInsets.symmetric(vertical: 16),
                         ),
@@ -965,7 +987,7 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                     flex: isEdit ? 2 : 3,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.tertiary,
+                        backgroundColor: cs.tertiary,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
@@ -999,7 +1021,7 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                         } catch (e) {
                           if (ctx.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                              SnackBar(content: Text('Error: $e'), backgroundColor: cs.error),
                             );
                           }
                         }
@@ -1013,17 +1035,20 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
             ],
           ),
         ),
-      ),
-    );
+      );
+    },
+  );
   }
 
   void _showDeleteInvestmentConfirm(String id) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: const Text('Delete Investment?', style: TextStyle(color: AppColors.textPrimary)),
-        content: const Text('This action cannot be undone.', style: TextStyle(color: AppColors.textSecondary)),
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return AlertDialog(
+        backgroundColor: cs.surface,
+        title: Text('Delete Investment?', style: TextStyle(color: cs.onSurface)),
+        content: Text('This action cannot be undone.', style: TextStyle(color: cs.onSurfaceVariant)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           TextButton(
@@ -1042,16 +1067,17 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                    SnackBar(content: Text('Error: $e'), backgroundColor: cs.error),
                   );
                 }
               }
             },
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            style: TextButton.styleFrom(foregroundColor: cs.error),
             child: const Text('Delete'),
           ),
         ],
-      ),
+      );
+      },
     );
   }
 }

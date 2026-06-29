@@ -17,6 +17,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double _totalIncome = 0;
   double _totalExpenses = 0;
   double _totalInvested = 0;
+  double _lastMonthExpenses = 0;
   List<Map<String, dynamic>> _recentExpenses = [];
   bool _isLoading = true;
   Map<String, double> _categoryTotals = {};
@@ -24,6 +25,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   static const _periodOptions = [1, 3, 6, 12, 36];
   static const _periodLabels = ['1M', '3M', '6M', '1Y', '3Y'];
   bool _isSyncing = false;
+  double _monthlyBudget = 0;
 
   @override
   void didChangeDependencies() {
@@ -49,6 +51,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
 
       double totalExpenses = 0;
+      double lastMonthExpenses = 0;
+      final now = DateTime.now();
+      final thisMonthStart = DateTime(now.year, now.month, 1);
+      final lastMonthStart = DateTime(now.year, now.month - 1, 1);
       final categoryTotals = <String, double>{};
       for (final exp in expenses) {
         final dt = DateTime.tryParse(exp['dateTime'] as String? ?? '');
@@ -57,6 +63,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         totalExpenses += amt;
         final cat = (exp['category'] as String?) ?? 'Other';
         categoryTotals[cat] = (categoryTotals[cat] ?? 0) + amt;
+        if (dt != null && !dt.isBefore(lastMonthStart) && dt.isBefore(thisMonthStart)) {
+          lastMonthExpenses += amt;
+        }
       }
 
       double totalInvested = 0;
@@ -65,6 +74,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final price = (inv['pricePerUnit'] as num?)?.toDouble() ?? 0;
         totalInvested += units * price;
       }
+
+      final budget = await authService.database.getMonthlyBudget();
 
       expenses.sort((a, b) {
         final da = DateTime.tryParse(a['dateTime'] as String? ?? '');
@@ -80,8 +91,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _totalIncome = totalIncome;
           _totalExpenses = totalExpenses;
           _totalInvested = totalInvested;
+          _lastMonthExpenses = lastMonthExpenses;
           _recentExpenses = expenses.take(5).toList();
           _categoryTotals = categoryTotals;
+          _monthlyBudget = budget;
           _isLoading = false;
         });
       }
@@ -91,6 +104,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _triggerSync() async {
+    final cs = Theme.of(context).colorScheme;
     if (_isSyncing) return;
     setState(() => _isSyncing = true);
 
@@ -124,7 +138,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(result.success ? 'Data synced!' : 'Sync failed'),
-          backgroundColor: result.success ? AppColors.success : AppColors.error,
+          backgroundColor: result.success ? AppColors.success : cs.error,
         ),
       );
     }
@@ -133,22 +147,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final bg = Theme.of(context).scaffoldBackgroundColor;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: bg,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Dashboard', style: TextStyle(color: AppColors.textPrimary)),
+        title: Text('Dashboard', style: TextStyle(color: cs.onSurface)),
         actions: [
           IconButton(
             icon: _isSyncing
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
-                : const Icon(Icons.cloud_upload, color: AppColors.primary),
+                ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary))
+                : Icon(Icons.cloud_upload, color: cs.primary),
             onPressed: _isSyncing ? null : _triggerSync,
             tooltip: 'Sync to GitHub',
           ),
           IconButton(
-            icon: const Icon(Icons.refresh, color: AppColors.primary),
+            icon: Icon(Icons.refresh, color: cs.primary),
             onPressed: () { setState(() => _isLoading = true); _loadDashboard(); },
           ),
         ],
@@ -158,7 +174,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           : SafeArea(
               child: RefreshIndicator(
                 onRefresh: _loadDashboard,
-                color: AppColors.primary,
+                color: cs.primary,
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.all(16),
@@ -167,6 +183,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     children: [
                       _buildBalanceCard(),
                       const SizedBox(height: 20),
+                      if (_monthlyBudget > 0) ...[
+                        _buildBudgetSection(),
+                        SizedBox(height: 20),
+                      ],
                       _buildQuickStats(),
                       const SizedBox(height: 20),
                       if (_categoryTotals.isNotEmpty) _buildCharts(),
@@ -181,6 +201,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildBalanceCard() {
+    final cs = Theme.of(context).colorScheme;
     final balance = _totalIncome - _totalExpenses;
     return Container(
       width: double.infinity,
@@ -188,29 +209,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            AppColors.primary.withValues(alpha: 0.2),
-            AppColors.surface,
+            cs.primary.withValues(alpha: 0.2),
+            cs.surface,
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('TOTAL BALANCE', style: TextStyle(color: AppColors.textSecondary, fontSize: 11, letterSpacing: 1.2)),
+          Text('TOTAL BALANCE', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11, letterSpacing: 1.2)),
           const SizedBox(height: 8),
-          Text('₹${balance.toStringAsFixed(2)}', style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+          Text('₹${balance.toStringAsFixed(2)}', style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: cs.onSurface)),
           const SizedBox(height: 20),
           Row(
             children: [
               _statItem('Income', '₹${_totalIncome.toStringAsFixed(2)}', AppColors.success),
               const Spacer(),
-              _statItem('Expenses', '₹${_totalExpenses.toStringAsFixed(2)}', AppColors.error),
+              _statItem('Expenses', '₹${_totalExpenses.toStringAsFixed(2)}', cs.error),
               const Spacer(),
-              _statItem('Invested', '₹${_totalInvested.toStringAsFixed(2)}', AppColors.tertiary),
+              _statItem('Invested', '₹${_totalInvested.toStringAsFixed(2)}', cs.tertiary),
             ],
           ),
         ],
@@ -219,6 +240,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _statItem(String title, String amount, Color color) {
+    final cs = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -226,54 +248,103 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: [
             CircleAvatar(radius: 4, backgroundColor: color),
             const SizedBox(width: 6),
-            Text(title, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+            Text(title, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
           ],
         ),
         const SizedBox(height: 4),
-        Text(amount, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+        Text(amount, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: cs.onSurface)),
       ],
     );
   }
 
+  Widget _buildBudgetSection() {
+    final cs = Theme.of(context).colorScheme;
+    final spent = _totalExpenses;
+    final pct = _monthlyBudget > 0 ? (spent / _monthlyBudget).clamp(0, 1).toDouble() : 0.0;
+    final remaining = _monthlyBudget - spent;
+    return Container(
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Monthly Budget', style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.bold)),
+              Text('₹${spent.toStringAsFixed(0)} / ₹${_monthlyBudget.toStringAsFixed(0)}', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
+            ],
+          ),
+          SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: pct,
+              minHeight: 12,
+              backgroundColor: cs.surfaceContainerHighest,
+              valueColor: AlwaysStoppedAnimation(pct > 0.9 ? cs.error : pct > 0.7 ? cs.tertiary : cs.primary),
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            remaining >= 0 ? '₹${remaining.toStringAsFixed(0)} remaining' : '₹${(-remaining).toStringAsFixed(0)} over budget!',
+            style: TextStyle(color: remaining >= 0 ? cs.onSurfaceVariant : cs.error, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildQuickStats() {
+    final cs = Theme.of(context).colorScheme;
     double avgDaily = 0;
     if (_recentExpenses.isNotEmpty) {
+      final count = _recentExpenses.length;
       final total = _recentExpenses.fold<double>(0, (sum, e) => sum + ((e['amount'] as num?)?.toDouble() ?? 0));
-      avgDaily = total / _recentExpenses.length;
+      avgDaily = total / count;
     }
+    final vsLastMonth = _lastMonthExpenses > 0
+        ? ((_totalExpenses - _lastMonthExpenses) / _lastMonthExpenses * 100).toStringAsFixed(1)
+        : '+0.0';
+    final isUp = _totalExpenses > _lastMonthExpenses;
     return Row(
       children: [
-        Expanded(child: _quickStatCard('Highest Expense', '₹${_recentExpenses.isNotEmpty ? _recentExpenses.first['amount']?.toStringAsFixed(2) ?? '0' : '0'}', Icons.arrow_upward, AppColors.error)),
+        Expanded(child: _quickStatCard('This Month', '₹${_totalExpenses.toStringAsFixed(0)}', Icons.calendar_month, cs.primary)),
         const SizedBox(width: 12),
-        Expanded(child: _quickStatCard('Avg. Daily', '₹${avgDaily.toStringAsFixed(2)}', Icons.show_chart, AppColors.info)),
+        Expanded(child: _quickStatCard('vs Last Month', '${isUp ? '+' : ''}$vsLastMonth%', isUp ? Icons.trending_up : Icons.trending_down, isUp ? cs.error : AppColors.success)),
         const SizedBox(width: 12),
-        Expanded(child: _quickStatCard('This Month', '₹${_totalExpenses.toStringAsFixed(2)}', Icons.calendar_month, AppColors.primary)),
+        Expanded(child: _quickStatCard('Avg/Transaction', '₹${avgDaily.toStringAsFixed(0)}', Icons.show_chart, AppColors.info)),
       ],
     );
   }
 
   Widget _quickStatCard(String label, String value, IconData icon, Color color) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.surfaceVariant.withValues(alpha: 0.3)),
+        border: Border.all(color: cs.surfaceContainerHighest.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, color: color, size: 20),
           const SizedBox(height: 8),
-          Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+          Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: cs.onSurface)),
           const SizedBox(height: 4),
-          Text(label, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+          Text(label, style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
         ],
       ),
     );
   }
 
   Widget _buildCharts() {
+    final cs = Theme.of(context).colorScheme;
     final colors = AppColors.chartColors;
     final entries = _categoryTotals.entries.toList();
     final maxY = entries.isEmpty ? 1.0 : entries.map((e) => e.value).reduce((a, b) => a > b ? a : b);
@@ -284,7 +355,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Spending Overview', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+            Text('Spending Overview', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: cs.onSurface)),
             Row(
               children: List.generate(_periodOptions.length, (i) {
                 final selected = _selectedPeriod == _periodOptions[i];
@@ -298,14 +369,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: selected ? AppColors.primary : Colors.transparent,
+                        color: selected ? cs.primary : Colors.transparent,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
                         _periodLabels[i],
                         style: TextStyle(
                           fontSize: 11,
-                          color: selected ? Colors.black : AppColors.textSecondary,
+                          color: selected ? Colors.black : cs.onSurfaceVariant,
                           fontWeight: selected ? FontWeight.bold : FontWeight.normal,
                         ),
                       ),
@@ -322,11 +393,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Container(
             padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: cs.surface,
               borderRadius: BorderRadius.circular(16),
             ),
             child: entries.isEmpty
-                ? const Center(child: Text('No data for this period', style: TextStyle(color: AppColors.textSecondary)))
+                ? Center(child: Text('No data for this period', style: TextStyle(color: cs.onSurfaceVariant)))
                 : BarChart(
                     BarChartData(
                       alignment: BarChartAlignment.spaceAround,
@@ -365,7 +436,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         drawVerticalLine: false,
                         horizontalInterval: maxY / 4,
                         getDrawingHorizontalLine: (value) => FlLine(
-                          color: AppColors.surfaceVariant.withValues(alpha: 0.3),
+                          color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
                           strokeWidth: 1,
                         ),
                       ),
@@ -392,23 +463,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildRecentActivity() {
+    final cs = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Recent Activity', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+        Text('Recent Activity', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: cs.onSurface)),
         const SizedBox(height: 12),
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: cs.surface,
             borderRadius: BorderRadius.circular(16),
           ),
           child: _recentExpenses.isEmpty
-              ? const Center(
+              ? Center(
                   child: Padding(
-                    padding: EdgeInsets.all(8),
-                    child: Text('No recent transactions', style: TextStyle(color: AppColors.textSecondary)),
+                    padding: const EdgeInsets.all(8),
+                    child: Text('No recent transactions', style: TextStyle(color: cs.onSurfaceVariant)),
                   ),
                 )
               : Column(
@@ -419,22 +491,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         Container(
                           padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
-                            color: AppColors.error.withValues(alpha: 0.2),
+                            color: cs.error.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(Icons.receipt, color: AppColors.error, size: 14),
+                          child: Icon(Icons.receipt, color: cs.error, size: 14),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(exp['description'] ?? 'Expense', style: const TextStyle(color: AppColors.textPrimary, fontSize: 13)),
+                              Text(exp['description'] ?? 'Expense', style: TextStyle(color: cs.onSurface, fontSize: 13)),
                               Text(exp['category'] ?? '', style: const TextStyle(color: AppColors.textTertiary, fontSize: 11)),
                             ],
                           ),
                         ),
-                        Text('₹${(exp['amount'] as num?)?.toStringAsFixed(2) ?? '0.00'}', style: const TextStyle(color: AppColors.error, fontSize: 13, fontWeight: FontWeight.bold)),
+                        Text('₹${(exp['amount'] as num?)?.toStringAsFixed(2) ?? '0.00'}', style: TextStyle(color: cs.error, fontSize: 13, fontWeight: FontWeight.bold)),
                       ],
                     ),
                   )).toList(),

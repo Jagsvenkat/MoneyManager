@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:money_manager/config/app_colors.dart';
 import 'package:money_manager/providers/auth_provider.dart';
+import 'package:money_manager/providers/app_provider.dart';
 import 'package:money_manager/config/app_routes.dart';
 import 'package:money_manager/core/security/secure_storage.dart';
 import 'package:intl/intl.dart';
@@ -20,16 +21,26 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  double _budgetAmount = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadBudget();
+  }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
+    final cs = Theme.of(context).colorScheme;
+    final bg = Theme.of(context).scaffoldBackgroundColor;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: bg,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Settings', style: TextStyle(color: AppColors.textPrimary)),
+        title: Text('Settings', style: TextStyle(color: cs.onSurface)),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -41,7 +52,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 16),
           _buildSection('Preferences', [
             _buildSettingTile(Icons.currency_rupee, 'Currency', 'INR (₹)', onTap: () => _showCurrencyDialog()),
-            _buildSettingTile(Icons.palette, 'Theme', 'Dark', onTap: () => _showThemeDialog()),
+            _buildSettingTile(Icons.palette, 'Theme', _themeLabel(context.watch<AppProvider>().themeMode), onTap: () => _showThemeDialog()),
           ]),
           const SizedBox(height: 16),
           _buildSection('Categories', [
@@ -54,6 +65,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSection('Data', [
             _buildSettingTile(Icons.file_download, 'Export Data', 'View summary', onTap: () => _exportData(authProvider)),
             _buildSettingTile(Icons.file_upload, 'Import Data', 'From backup', onTap: () => _showImportDialog()),
+          ]),
+          const SizedBox(height: 16),
+          _buildSection('Budget', [
+            _buildSettingTile(Icons.account_balance_wallet, 'Monthly Budget', currentBudgetLabel, onTap: () => _showBudgetDialog()),
           ]),
           const SizedBox(height: 16),
           _buildSection('Backup', [
@@ -72,9 +87,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (context.mounted) context.go('/login');
               },
               icon: const Icon(Icons.logout),
-              label: const Text('Logout'),
+              label: Text('Logout'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.error,
+                backgroundColor: cs.error,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
@@ -86,10 +101,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: OutlinedButton.icon(
               onPressed: () => _confirmDeleteAccount(authProvider),
               icon: const Icon(Icons.delete_forever),
-              label: const Text('Delete Account'),
+              label: Text('Delete Account'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.error,
-                side: const BorderSide(color: AppColors.error),
+                foregroundColor: cs.error,
+                side: BorderSide(color: cs.error),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
@@ -101,86 +116,122 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showUserDialog(AuthProvider authProvider) {
+    final cs = Theme.of(context).colorScheme;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: const Text('Account', style: TextStyle(color: AppColors.textPrimary)),
+        backgroundColor: cs.surface,
+        title: Text('Account', style: TextStyle(color: cs.onSurface)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('User ID', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+            Text('User ID', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
             const SizedBox(height: 4),
-            Text(authProvider.currentUserId ?? 'Not set', style: const TextStyle(color: AppColors.textPrimary, fontSize: 16)),
+            Text(authProvider.currentUserId ?? 'Not set', style: TextStyle(color: cs.onSurface, fontSize: 16)),
             const SizedBox(height: 16),
-            const Text('Your data is stored locally and end-to-end encrypted.', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+            Text('Your data is stored locally and end-to-end encrypted.', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK', style: TextStyle(color: AppColors.primary))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('OK', style: TextStyle(color: cs.primary))),
         ],
       ),
     );
   }
 
   void _showSecurityDialog() {
+    final cs = Theme.of(context).colorScheme;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: const Text('Security', style: TextStyle(color: AppColors.textPrimary)),
-        content: const Column(
+        backgroundColor: cs.surface,
+        title: Text('Security', style: TextStyle(color: cs.onSurface)),
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('\u2022 End-to-end encryption (XChaCha20-Poly1305)', style: TextStyle(color: AppColors.textPrimary, fontSize: 14)),
+            Text('\u2022 End-to-end encryption (XChaCha20-Poly1305)', style: TextStyle(color: cs.onSurface, fontSize: 14)),
             SizedBox(height: 8),
-            Text('\u2022 Password-derived keys (PBKDF2-HMAC-SHA512)', style: TextStyle(color: AppColors.textPrimary, fontSize: 14)),
+            Text('\u2022 Password-derived keys (PBKDF2-HMAC-SHA512)', style: TextStyle(color: cs.onSurface, fontSize: 14)),
             SizedBox(height: 8),
-            Text('\u2022 Envelope encryption with unique data keys', style: TextStyle(color: AppColors.textPrimary, fontSize: 14)),
+            Text('\u2022 Envelope encryption with unique data keys', style: TextStyle(color: cs.onSurface, fontSize: 14)),
             SizedBox(height: 8),
-            Text('\u2022 All data encrypted before storage', style: TextStyle(color: AppColors.textPrimary, fontSize: 14)),
+            Text('\u2022 All data encrypted before storage', style: TextStyle(color: cs.onSurface, fontSize: 14)),
             SizedBox(height: 16),
             Text('Your master key is derived from your password and never stored.', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK', style: TextStyle(color: AppColors.primary))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('OK', style: TextStyle(color: cs.primary))),
         ],
       ),
     );
   }
 
   void _showCurrencyDialog() {
+    final cs = Theme.of(context).colorScheme;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: const Text('Currency', style: TextStyle(color: AppColors.textPrimary)),
-        content: const Text('Indian Rupee (INR) is currently the only supported currency. International support coming soon.', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+        backgroundColor: cs.surface,
+        title: Text('Currency', style: TextStyle(color: cs.onSurface)),
+        content: Text('Indian Rupee (INR) is currently the only supported currency. International support coming soon.', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK', style: TextStyle(color: AppColors.primary))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('OK', style: TextStyle(color: cs.primary))),
         ],
       ),
     );
   }
 
+  String _themeLabel(ThemeMode mode) {
+    switch (mode) {
+      case ThemeMode.light: return 'Light';
+      case ThemeMode.system: return 'System';
+      case ThemeMode.dark: return 'Dark';
+    }
+  }
+
   void _showThemeDialog() {
+    final appProvider = context.read<AppProvider>();
+    final cs = Theme.of(context).colorScheme;
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: const Text('Theme', style: TextStyle(color: AppColors.textPrimary)),
-        content: const Text('Dark theme is the default. Light theme support coming soon.', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK', style: TextStyle(color: AppColors.primary))),
-        ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: cs.surface,
+          title: Text('Theme', style: TextStyle(color: cs.onSurface)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Choose your preferred appearance.', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14)),
+              const SizedBox(height: 16),
+              SegmentedButton<ThemeMode>(
+                segments: const [
+                  ButtonSegment(value: ThemeMode.dark, label: Text('Dark'), icon: Icon(Icons.dark_mode)),
+                  ButtonSegment(value: ThemeMode.light, label: Text('Light'), icon: Icon(Icons.light_mode)),
+                  ButtonSegment(value: ThemeMode.system, label: Text('System'), icon: Icon(Icons.brightness_auto)),
+                ],
+                selected: {appProvider.themeMode},
+                onSelectionChanged: (selected) {
+                  final mode = selected.first;
+                  appProvider.setThemeMode(mode);
+                  setDialogState(() {});
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text('OK', style: TextStyle(color: cs.primary))),
+          ],
+        ),
       ),
     );
   }
 
   Future<void> _exportData(AuthProvider authProvider) async {
+    final cs = Theme.of(context).colorScheme;
     final srv = authProvider.authService;
     if (srv == null) return;
 
@@ -268,27 +319,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Export error: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text('Export error: $e'), backgroundColor: cs.error),
         );
       }
     }
   }
 
   void _showImportDialog() {
+    final cs = Theme.of(context).colorScheme;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: const Text('Import Data', style: TextStyle(color: AppColors.textPrimary)),
-        content: const Text('Import from backup is not yet available. Export your data now and import it when this feature is ready.', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+        backgroundColor: cs.surface,
+        title: Text('Import Data', style: TextStyle(color: cs.onSurface)),
+        content: Text('Import from backup is not yet available. Export your data now and import it when this feature is ready.', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK', style: TextStyle(color: AppColors.primary))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('OK', style: TextStyle(color: cs.primary))),
         ],
       ),
     );
   }
 
   void _showSyncConfigDialog() {
+    final cs = Theme.of(context).colorScheme;
     final tokenCtrl = TextEditingController();
     final ownerCtrl = TextEditingController();
     final repoCtrl = TextEditingController();
@@ -300,25 +353,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: AppColors.surface,
-          title: const Text('GitHub Sync', style: TextStyle(color: AppColors.textPrimary)),
+          backgroundColor: cs.surface,
+          title: Text('GitHub Sync', style: TextStyle(color: cs.onSurface)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Configure your GitHub repo for encrypted cloud backup.', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                Text('Configure your GitHub repo for encrypted cloud backup.', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
                 const SizedBox(height: 16),
                 TextField(
                   controller: tokenCtrl,
                   obscureText: !tokenVisible,
-                  style: const TextStyle(color: AppColors.textPrimary),
+                  style: TextStyle(color: cs.onSurface),
                   decoration: InputDecoration(
                     labelText: 'Personal Access Token',
-                    labelStyle: const TextStyle(color: AppColors.textSecondary),
-                    filled: true, fillColor: AppColors.surfaceVariant,
+                    labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                    filled: true, fillColor: cs.surfaceContainerHighest,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                     suffixIcon: IconButton(
-                      icon: Icon(tokenVisible ? Icons.visibility : Icons.visibility_off, color: AppColors.textSecondary),
+                      icon: Icon(tokenVisible ? Icons.visibility : Icons.visibility_off, color: cs.onSurfaceVariant),
                       onPressed: () => setDialogState(() => tokenVisible = !tokenVisible),
                     ),
                   ),
@@ -326,22 +379,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: ownerCtrl,
-                  style: const TextStyle(color: AppColors.textPrimary),
+                  style: TextStyle(color: cs.onSurface),
                   decoration: InputDecoration(
                     labelText: 'Repo Owner (username)',
-                    labelStyle: const TextStyle(color: AppColors.textSecondary),
-                    filled: true, fillColor: AppColors.surfaceVariant,
+                    labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                    filled: true, fillColor: cs.surfaceContainerHighest,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                   ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: repoCtrl,
-                  style: const TextStyle(color: AppColors.textPrimary),
+                  style: TextStyle(color: cs.onSurface),
                   decoration: InputDecoration(
                     labelText: 'Repo Name',
-                    labelStyle: const TextStyle(color: AppColors.textSecondary),
-                    filled: true, fillColor: AppColors.surfaceVariant,
+                    labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                    filled: true, fillColor: cs.surfaceContainerHighest,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                   ),
                 ),
@@ -349,7 +402,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary))),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: TextStyle(color: cs.onSurfaceVariant))),
             TextButton(
               onPressed: () async {
                 await SecureStorageService.saveGitHubPat(userId: 'sync', encryptedPat: tokenCtrl.text.trim());
@@ -361,7 +414,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   );
                 }
               },
-              child: const Text('Save', style: TextStyle(color: AppColors.primary)),
+              child: Text('Save', style: TextStyle(color: cs.primary)),
             ),
           ],
         ),
@@ -379,28 +432,79 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  String get currentBudgetLabel => _budgetAmount > 0 ? '₹${_budgetAmount.toStringAsFixed(0)}/mo' : 'Not set';
+
+  Future<void> _loadBudget() async {
+    final srv = context.read<AuthProvider>().authService;
+    if (srv == null) return;
+    final budget = await srv.database.getMonthlyBudget();
+    if (mounted) setState(() => _budgetAmount = budget);
+  }
+
+  void _showBudgetDialog() {
+    final cs = Theme.of(context).colorScheme;
+    final ctrl = TextEditingController(text: _budgetAmount > 0 ? _budgetAmount.toStringAsFixed(0) : '');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: cs.surface,
+        title: Text('Monthly Budget', style: TextStyle(color: cs.onSurface)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Set a monthly spending goal. Progress will show on Dashboard.', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+            SizedBox(height: 16),
+            TextField(
+              controller: ctrl,
+              keyboardType: TextInputType.number,
+              style: TextStyle(color: cs.onSurface),
+              decoration: InputDecoration(
+                prefixText: '₹ ',
+                labelText: 'Budget Amount',
+                filled: true,
+                fillColor: cs.surfaceContainerHighest,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () { ctrl.clear(); Navigator.pop(ctx); }, child: Text('Remove', style: TextStyle(color: cs.error))),
+          TextButton(onPressed: () async {
+            final amt = double.tryParse(ctrl.text) ?? 0;
+            final srv = context.read<AuthProvider>().authService;
+            if (srv != null) await srv.database.setMonthlyBudget(amt);
+            _loadBudget();
+            if (ctx.mounted) Navigator.pop(ctx);
+          }, child: Text('Save', style: TextStyle(color: cs.primary))),
+        ],
+      ),
+    );
+  }
+
   void _confirmDeleteAccount(AuthProvider authProvider) {
+    final cs = Theme.of(context).colorScheme;
     String typed = '';
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: AppColors.surface,
-          title: const Text('Delete Account', style: TextStyle(color: AppColors.error)),
+          backgroundColor: cs.surface,
+          title: Text('Delete Account', style: TextStyle(color: cs.error)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('This will permanently delete all your data including expenses, income, loans, investments, and settings. This action cannot be undone.', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+              Text('This will permanently delete all your data including expenses, income, loans, investments, and settings. This action cannot be undone.', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14)),
               const SizedBox(height: 16),
-              const Text('Type DELETE to confirm:', style: TextStyle(color: AppColors.textPrimary, fontSize: 13)),
+              Text('Type DELETE to confirm:', style: TextStyle(color: cs.onSurface, fontSize: 13)),
               const SizedBox(height: 8),
               TextField(
-                style: const TextStyle(color: AppColors.textPrimary),
+                style: TextStyle(color: cs.onSurface),
                 decoration: InputDecoration(
                   hintText: 'DELETE',
                   hintStyle: const TextStyle(color: AppColors.textTertiary),
-                  filled: true, fillColor: AppColors.surfaceVariant,
+                  filled: true, fillColor: cs.surfaceContainerHighest,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),
                 onChanged: (v) => setDialogState(() => typed = v),
@@ -408,15 +512,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary))),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: TextStyle(color: cs.onSurfaceVariant))),
             TextButton(
               onPressed: typed == 'DELETE' ? () async {
                 Navigator.pop(ctx);
                 await authProvider.deleteAccount();
                 if (context.mounted) context.go('/register');
               } : null,
-              style: TextButton.styleFrom(foregroundColor: typed == 'DELETE' ? AppColors.error : AppColors.textTertiary),
-              child: const Text('Delete Everything'),
+              style: TextButton.styleFrom(foregroundColor: typed == 'DELETE' ? cs.error : AppColors.textTertiary),
+              child: Text('Delete Everything'),
             ),
           ],
         ),
@@ -425,16 +529,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildSection(String title, List<Widget> items) {
+    final cs = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text(title, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1)),
+          child: Text(title, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1)),
         ),
         Container(
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: cs.surface,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(children: items),
@@ -444,11 +549,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildSettingTile(IconData icon, String title, String subtitle, {VoidCallback? onTap}) {
+    final cs = Theme.of(context).colorScheme;
     return ListTile(
       onTap: onTap,
-      leading: Icon(icon, color: AppColors.primary),
-      title: Text(title, style: const TextStyle(color: AppColors.textPrimary)),
-      subtitle: Text(subtitle, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+      leading: Icon(icon, color: cs.primary),
+      title: Text(title, style: TextStyle(color: cs.onSurface)),
+      subtitle: Text(subtitle, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
       trailing: const Icon(Icons.chevron_right, color: AppColors.textTertiary),
     );
   }

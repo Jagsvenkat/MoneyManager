@@ -109,3 +109,43 @@ class AppColors {
     return colorNames[color] ?? 'Custom';
   }
 }
+
+/// Material 3 Light theme palette
+class AppColorsLight {
+  static const Color primary = Color(0xFF0D9488); // Teal 600
+  static const Color onPrimary = Color(0xFFFFFFFF);
+  static const Color primaryContainer = Color(0xFFCCFBF1); // Teal 100
+  static const Color onPrimaryContainer = Color(0xFF134E4A);
+
+  static const Color secondary = Color(0xFF7C3AED); // Violet 600
+  static const Color onSecondary = Color(0xFFFFFFFF);
+  static const Color secondaryContainer = Color(0xFFEDE9FE); // Violet 100
+  static const Color onSecondaryContainer = Color(0xFF4C1D95);
+
+  static const Color tertiary = Color(0xFFD97706); // Amber 600
+  static const Color onTertiary = Color(0xFFFFFFFF);
+  static const Color tertiaryContainer = Color(0xFFFEF3C7); // Amber 100
+  static const Color onTertiaryContainer = Color(0xFF78350F);
+
+  static const Color error = Color(0xFFE11D48); // Rose 600
+  static const Color onError = Color(0xFFFFFFFF);
+  static const Color errorContainer = Color(0xFFFFE4E6); // Rose 100
+  static const Color onErrorContainer = Color(0xFF881337);
+
+  static const Color background = Color(0xFFF8FAFC); // Slate 50
+  static const Color onBackground = Color(0xFF0F172A);
+  static const Color surface = Color(0xFFFFFFFF);
+  static const Color onSurface = Color(0xFF0F172A);
+  static const Color surfaceVariant = Color(0xFFF1F5F9); // Slate 100
+  static const Color onSurfaceVariant = Color(0xFF475569);
+  static const Color outline = Color(0xFFCBD5E1);
+  static const Color outlineVariant = Color(0xFFE2E8F0);
+
+  static const Color success = Color(0xFF059669);
+  static const Color warning = Color(0xFFD97706);
+  static const Color info = Color(0xFF2563EB);
+
+  static const Color textPrimary = onBackground;
+  static const Color textSecondary = onSurfaceVariant;
+  static const Color textTertiary = Color(0xFF94A3B8);
+}

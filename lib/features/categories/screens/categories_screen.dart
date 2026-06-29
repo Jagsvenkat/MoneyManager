@@ -35,14 +35,16 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final bg = Theme.of(context).scaffoldBackgroundColor;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: bg,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Text('${_typeLabel()} Categories', style: const TextStyle(color: AppColors.textPrimary)),
+        title: Text('${_typeLabel()} Categories', style: TextStyle(color: cs.onSurface)),
         actions: [
-          IconButton(icon: const Icon(Icons.add, color: AppColors.primary), onPressed: _showAddEditDialog),
+          IconButton(icon: Icon(Icons.add, color: cs.primary), onPressed: _showAddEditDialog),
         ],
       ),
       body: _isLoading
@@ -54,7 +56,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                     children: [
                       Icon(Icons.category, size: 64, color: AppColors.textTertiary),
                       const SizedBox(height: 16),
-                      Text('No ${widget.type} categories', style: const TextStyle(color: AppColors.textSecondary, fontSize: 16)),
+                      Text('No ${widget.type} categories', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 16)),
                       const SizedBox(height: 8),
                       Text('Tap + to add one', style: const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
                     ],
@@ -79,6 +81,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   Widget _buildCategoryCard(int index) {
+    final cs = Theme.of(context).colorScheme;
     final cat = _categories[index];
     final color = Color(cat['color'] as int? ?? AppColors.chartColors[0].toARGB32());
     final tags = (cat['tags'] as List?)?.cast<String>() ?? [];
@@ -86,8 +89,8 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       child: ExpansionTile(
         tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        backgroundColor: AppColors.surface,
-        collapsedBackgroundColor: AppColors.surface,
+        backgroundColor: cs.surface,
+        collapsedBackgroundColor: cs.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         leading: Container(
@@ -95,12 +98,12 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           decoration: BoxDecoration(color: color.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(10)),
           child: Icon(Icons.category, color: color, size: 18),
         ),
-        title: Text(cat['name'] as String? ?? '', style: const TextStyle(color: AppColors.textPrimary, fontSize: 15)),
+        title: Text(cat['name'] as String? ?? '', style: TextStyle(color: cs.onSurface, fontSize: 15)),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              icon: const Icon(Icons.add_circle_outline, color: AppColors.primary, size: 20),
+              icon: Icon(Icons.add_circle_outline, color: cs.primary, size: 20),
               onPressed: () => _showAddTagDialog(cat['id'] as String, tags),
             ),
             IconButton(
@@ -108,7 +111,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
               onPressed: () => _showAddEditDialog(category: cat),
             ),
             IconButton(
-              icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 18),
+              icon: Icon(Icons.delete_outline, color: cs.error, size: 18),
               onPressed: () => _confirmDelete(cat['id'] as String),
             ),
           ],
@@ -126,7 +129,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                 spacing: 6,
                 runSpacing: 6,
                 children: tags.map((tag) => Chip(
-                  label: Text(tag, style: const TextStyle(color: AppColors.textPrimary, fontSize: 12)),
+                  label: Text(tag, style: TextStyle(color: cs.onSurface, fontSize: 12)),
                   backgroundColor: color.withValues(alpha: 0.15),
                   deleteIcon: const Icon(Icons.close, size: 14, color: AppColors.textTertiary),
                   onDeleted: () => _removeTag(cat['id'] as String, tags, tag),
@@ -142,6 +145,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   void _showAddEditDialog({Map<String, dynamic>? category}) {
+    final cs = Theme.of(context).colorScheme;
     final nameCtrl = TextEditingController(text: category?['name'] as String? ?? '');
     int selectedColor = category?['color'] as int? ?? AppColors.chartColors[0].toARGB32();
 
@@ -149,18 +153,18 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: AppColors.surface,
-          title: Text(category != null ? 'Edit Category' : 'Add Category', style: const TextStyle(color: AppColors.textPrimary)),
+          backgroundColor: cs.surface,
+          title: Text(category != null ? 'Edit Category' : 'Add Category', style: TextStyle(color: cs.onSurface)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: nameCtrl,
-                style: const TextStyle(color: AppColors.textPrimary),
+                style: TextStyle(color: cs.onSurface),
                 decoration: InputDecoration(
                   hintText: 'Category name',
                   hintStyle: const TextStyle(color: AppColors.textTertiary),
-                  filled: true, fillColor: AppColors.surfaceVariant,
+                  filled: true, fillColor: cs.surfaceContainerHighest,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),
               ),
@@ -187,7 +191,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary))),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: TextStyle(color: cs.onSurfaceVariant))),
             TextButton(
               onPressed: () async {
                 if (nameCtrl.text.trim().isEmpty) return;
@@ -208,7 +212,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                 if (ctx.mounted) Navigator.pop(ctx);
                 await _loadCategories();
               },
-              child: const Text('Save', style: TextStyle(color: AppColors.primary)),
+              child: Text('Save', style: TextStyle(color: cs.primary)),
             ),
           ],
         ),
@@ -217,25 +221,26 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   void _showAddTagDialog(String catId, List<String> currentTags) {
+    final cs = Theme.of(context).colorScheme;
     final tagCtrl = TextEditingController();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: const Text('Add Tag', style: TextStyle(color: AppColors.textPrimary)),
+        backgroundColor: cs.surface,
+        title: Text('Add Tag', style: TextStyle(color: cs.onSurface)),
         content: TextField(
           controller: tagCtrl,
           autofocus: true,
-          style: const TextStyle(color: AppColors.textPrimary),
+          style: TextStyle(color: cs.onSurface),
           decoration: InputDecoration(
             hintText: 'e.g. Meals, Snacks, Popcorns',
             hintStyle: const TextStyle(color: AppColors.textTertiary),
-            filled: true, fillColor: AppColors.surfaceVariant,
+            filled: true, fillColor: cs.surfaceContainerHighest,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: TextStyle(color: cs.onSurfaceVariant))),
           TextButton(
             onPressed: () async {
               if (tagCtrl.text.trim().isEmpty) return;
@@ -248,7 +253,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
               if (ctx.mounted) Navigator.pop(ctx);
               await _loadCategories();
             },
-            child: const Text('Add', style: TextStyle(color: AppColors.primary)),
+            child: Text('Add', style: TextStyle(color: cs.primary)),
           ),
         ],
       ),
@@ -265,17 +270,18 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   void _confirmDelete(String id) async {
+    final cs = Theme.of(context).colorScheme;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: const Text('Delete Category?', style: TextStyle(color: AppColors.textPrimary)),
-        content: const Text('This cannot be undone. Existing entries are not affected.', style: TextStyle(color: AppColors.textSecondary)),
+        backgroundColor: cs.surface,
+        title: Text('Delete Category?', style: TextStyle(color: cs.onSurface)),
+        content: Text('This cannot be undone. Existing entries are not affected.', style: TextStyle(color: cs.onSurfaceVariant)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary))),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: TextStyle(color: cs.onSurfaceVariant))),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
+            child: Text('Delete', style: TextStyle(color: cs.error)),
           ),
         ],
       ),
