@@ -48,6 +48,53 @@ class AuthService {
     _db = LocalDatabaseService();
   }
 
+  /// Auto-login using stored session
+  /// Returns true if session was restored successfully
+  Future<bool> tryAutoLogin() async {
+    final storedUserId = await SecureStorageService.loadLastUserId();
+    if (storedUserId == null) return false;
+
+    final sessionKey = await SecureStorageService.loadSessionKey();
+    if (sessionKey == null) return false;
+
+    final encryptedSessionUmk = await SecureStorageService.loadSessionUmk();
+    if (encryptedSessionUmk == null) return false;
+
+    try {
+      // Decrypt session UMK using stored session key
+      final umk = await _decryptUmkBackup(encryptedSessionUmk, sessionKey);
+      _currentUserId = storedUserId;
+      _userMasterKey = umk;
+
+      await _db.initialize(
+        userId: storedUserId,
+        deviceId: _deviceId,
+        wrappingKey: _userMasterKey,
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Save session for auto-login on next app start
+  Future<void> saveSession() async {
+    // Generate a random session key
+    final sessionKey = base64Encode(SecureRandom.nextBytes(32));
+
+    // Encrypt UMK with session key (reuse backup mechanism)
+    final encryptedUmk = await _encryptUmkForBackup(_userMasterKey, sessionKey);
+
+    await SecureStorageService.saveLastUserId(_currentUserId);
+    await SecureStorageService.saveSessionKey(sessionKey);
+    await SecureStorageService.saveSessionUmk(encryptedUmk);
+  }
+
+  /// Clear saved session
+  Future<void> clearSession() async {
+    await SecureStorageService.clearSession();
+  }
+
   /// Register new user
   /// Returns encrypted backup for safekeeping
   Future<String> register({
@@ -93,6 +140,9 @@ class AuthService {
       deviceId: _deviceId,
       wrappingKey: _userMasterKey,
     );
+
+    // Save session for auto-login
+    await saveSession();
 
     return backupUmkEncrypted;
   }
@@ -142,6 +192,9 @@ class AuthService {
       deviceId: _deviceId,
       wrappingKey: _userMasterKey,
     );
+
+    // Save session for auto-login
+    await saveSession();
   }
 
   /// Get current user
@@ -200,12 +253,14 @@ class AuthService {
   /// Logout user (clear session, keep stored credentials for re-login)
   Future<void> logout() async {
     await _db.close();
+    await clearSession();
   }
 
   /// Delete account — wipe all data and secure storage
   Future<void> deleteAccount() async {
     await _db.deleteAll();
     await _db.close();
+    await clearSession();
     await SecureStorageService.clearUserStorage(_currentUserId);
     await SecureStorageService.clearAll();
   }

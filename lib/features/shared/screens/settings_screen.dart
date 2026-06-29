@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +6,9 @@ import 'package:money_manager/config/app_colors.dart';
 import 'package:money_manager/providers/auth_provider.dart';
 import 'package:money_manager/config/app_routes.dart';
 import 'package:intl/intl.dart';
+import 'package:excel/excel.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -180,61 +184,75 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final loans = await srv.database.listLoans();
       final investments = await srv.database.listInvestments();
 
-      final csvBuffer = StringBuffer();
-      csvBuffer.writeln('--- Money Manager Export ---');
-      csvBuffer.writeln('Exported: ${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now())}');
-      csvBuffer.writeln('');
+      final excel = Excel.createExcel();
+      final dateFormat = DateFormat('yyyy-MM-dd');
 
-      csvBuffer.writeln('=== EXPENSES ===');
-      csvBuffer.writeln('Date,Category,Tag,Description,Amount');
+      // --- EXPENSES sheet ---
+      final expensesSheet = excel['Expenses'];
+      expensesSheet.appendRow(['Date', 'Category', 'Tag', 'Description', 'Amount']);
       for (final e in expenses) {
         final dt = DateTime.tryParse(e['dateTime'] as String? ?? '');
-        csvBuffer.writeln('${dt != null ? DateFormat('yyyy-MM-dd').format(dt) : ''},${e['category'] ?? ''},${e['tag'] ?? ''},${e['description'] ?? ''},${e['amount'] ?? 0}');
+        expensesSheet.appendRow([
+          dt != null ? dateFormat.format(dt) : '',
+          e['category'] as String? ?? '',
+          e['tag'] as String? ?? '',
+          e['description'] as String? ?? '',
+          (e['amount'] ?? 0).toString(),
+        ]);
       }
 
-      csvBuffer.writeln('');
-      csvBuffer.writeln('=== INCOME ===');
-      csvBuffer.writeln('Date,Source,Frequency,Amount');
+      // --- INCOME sheet ---
+      final incomeSheet = excel['Income'];
+      incomeSheet.appendRow(['Date', 'Source', 'Frequency', 'Amount']);
       for (final i in incomes) {
         final dt = DateTime.tryParse(i['dateTime'] as String? ?? '');
-        csvBuffer.writeln('${dt != null ? DateFormat('yyyy-MM-dd').format(dt) : ''},${i['source'] ?? ''},${i['frequency'] ?? ''},${i['amount'] ?? 0}');
+        incomeSheet.appendRow([
+          dt != null ? dateFormat.format(dt) : '',
+          i['source'] as String? ?? '',
+          i['frequency'] as String? ?? '',
+          (i['amount'] ?? 0).toString(),
+        ]);
       }
 
-      csvBuffer.writeln('');
-      csvBuffer.writeln('=== LOANS ===');
-      csvBuffer.writeln('Date,Person,Type,Amount');
+      // --- LOANS sheet ---
+      final loansSheet = excel['Loans'];
+      loansSheet.appendRow(['Date', 'Person', 'Type', 'Amount']);
       for (final l in loans) {
         final dt = DateTime.tryParse(l['dateTime'] as String? ?? '');
-        csvBuffer.writeln('${dt != null ? DateFormat('yyyy-MM-dd').format(dt) : ''},${l['personName'] ?? ''},${l['loanType'] ?? ''},${l['amount'] ?? 0}');
+        loansSheet.appendRow([
+          dt != null ? dateFormat.format(dt) : '',
+          l['personName'] as String? ?? '',
+          l['loanType'] as String? ?? '',
+          (l['amount'] ?? 0).toString(),
+        ]);
       }
 
-      csvBuffer.writeln('');
-      csvBuffer.writeln('=== INVESTMENTS ===');
-      csvBuffer.writeln('Date,Name,Type,Units,Price/Unit');
+      // --- INVESTMENTS sheet ---
+      final investmentsSheet = excel['Investments'];
+      investmentsSheet.appendRow(['Date', 'Name', 'Type', 'Units', 'Price/Unit']);
       for (final inv in investments) {
         final dt = DateTime.tryParse(inv['dateTime'] as String? ?? '');
-        csvBuffer.writeln('${dt != null ? DateFormat('yyyy-MM-dd').format(dt) : ''},${inv['name'] ?? ''},${inv['type'] ?? ''},${inv['units'] ?? 0},${inv['pricePerUnit'] ?? 0}');
+        investmentsSheet.appendRow([
+          dt != null ? dateFormat.format(dt) : '',
+          inv['name'] as String? ?? '',
+          inv['type'] as String? ?? '',
+          (inv['units'] ?? 0).toString(),
+          (inv['pricePerUnit'] ?? 0).toString(),
+        ]);
       }
 
+      // Save to temp file and share
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/SJsaver_Export_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx');
+      final bytes = excel.encode();
+      if (bytes == null) throw Exception('Failed to generate Excel file');
+      await file.writeAsBytes(bytes);
+
       if (!context.mounted) return;
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: AppColors.surface,
-          title: const Text('Export Data', style: TextStyle(color: AppColors.textPrimary)),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: SelectableText(
-                csvBuffer.toString(),
-                style: const TextStyle(color: AppColors.textSecondary, fontSize: 11, fontFamily: 'monospace'),
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close', style: TextStyle(color: AppColors.primary))),
-          ],
-        ),
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        subject: 'SJsaver Export',
+        text: 'Money Manager data export',
       );
     } catch (e) {
       if (context.mounted) {

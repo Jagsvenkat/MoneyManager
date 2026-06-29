@@ -177,6 +177,59 @@ class SecureStorageService {
     await _provider.delete('sync_metadata_$userId');
   }
 
+  /// Save last logged-in user ID (for auto-login)
+  static Future<void> saveLastUserId(String userId) async {
+    await _provider.save('last_user_id', userId);
+  }
+
+  /// Load last logged-in user ID
+  static Future<String?> loadLastUserId() async {
+    return await _provider.read('last_user_id');
+  }
+
+  /// Save session key for auto-login
+  static Future<void> saveSessionKey(String key) async {
+    await _provider.save('session_key', key);
+  }
+
+  /// Load session key
+  static Future<String?> loadSessionKey() async {
+    return await _provider.read('session_key');
+  }
+
+  /// Save session-encrypted UMK
+  static Future<void> saveSessionUmk(String encryptedUmk) async {
+    await _provider.save('session_umk', encryptedUmk);
+  }
+
+  /// Load session-encrypted UMK
+  static Future<String?> loadSessionUmk() async {
+    return await _provider.read('session_umk');
+  }
+
+  /// Clear session data (on logout)
+  static Future<void> clearSession() async {
+    await _provider.delete('last_user_id');
+    await _provider.delete('session_key');
+    await _provider.delete('session_umk');
+  }
+
+  /// Save GitHub sync settings (owner, repo name)
+  static Future<void> saveSyncSettings({
+    required String owner,
+    required String repoName,
+  }) async {
+    final data = {'owner': owner, 'repoName': repoName};
+    await _provider.save('sync_settings', jsonEncode(data));
+  }
+
+  /// Load GitHub sync settings
+  static Future<Map<String, dynamic>?> loadSyncSettings() async {
+    final data = await _provider.read('sync_settings');
+    if (data == null) return null;
+    return jsonDecode(data) as Map<String, dynamic>;
+  }
+
   /// Clear all storage (factory reset)
   static Future<void> clearAll() async {
     await _provider.clear();

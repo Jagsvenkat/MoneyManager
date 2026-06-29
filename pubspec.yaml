@@ -73,6 +73,9 @@ dependencies:
   # Platform channels for biometric (optional)
   local_auth: ^2.2.0
 
+  # Share files (export)
+  share_plus: ^10.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

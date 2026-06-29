@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:money_manager/config/app_colors.dart';
+import 'package:money_manager/core/security/secure_storage.dart';
+import 'package:money_manager/core/services/github_sync_service.dart';
+import 'package:money_manager/providers/auth_provider.dart';
 
 class SyncScreen extends StatefulWidget {
   const SyncScreen({super.key});
@@ -18,6 +22,39 @@ class _SyncScreenState extends State<SyncScreen> {
   String? _lastSyncStatus;
 
   @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final token = await SecureStorageService.loadGitHubPat('sync');
+    final settings = await SecureStorageService.loadSyncSettings();
+
+    if (token != null && settings != null) {
+      _tokenController.text = token;
+      _ownerController.text = settings['owner'] as String? ?? '';
+      _repoController.text = settings['repoName'] as String? ?? '';
+      setState(() => _isConfigured = true);
+    }
+
+    _loadSyncStatus();
+  }
+
+  Future<void> _loadSyncStatus() async {
+    final auth = context.read<AuthProvider>();
+    final userId = auth.currentUserId;
+    if (userId == null) return;
+
+    final metadata = await SecureStorageService.loadSyncMetadata(userId);
+    if (metadata != null) {
+      setState(() {
+        _lastSyncStatus = 'Last sync: ${metadata['lastSyncTimestamp']}';
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _tokenController.dispose();
     _repoController.dispose();
@@ -25,8 +62,98 @@ class _SyncScreenState extends State<SyncScreen> {
     super.dispose();
   }
 
+  GitHubSyncService? _buildSyncService(AuthProvider auth) {
+    final srv = auth.authService;
+    if (srv == null) return null;
+    if (_tokenController.text.isEmpty || _ownerController.text.isEmpty || _repoController.text.isEmpty) return null;
+
+    return GitHubSyncService(
+      githubToken: _tokenController.text,
+      repoOwner: _ownerController.text,
+      repoName: _repoController.text,
+      db: srv.database,
+      userId: auth.currentUserId ?? '',
+      deviceId: srv.deviceId,
+    );
+  }
+
+  Future<void> _saveSettings() async {
+    await SecureStorageService.saveGitHubPat(
+      userId: 'sync',
+      encryptedPat: _tokenController.text,
+    );
+    await SecureStorageService.saveSyncSettings(
+      owner: _ownerController.text,
+      repoName: _repoController.text,
+    );
+  }
+
+  Future<void> _updateSyncStatus(SyncResult result) async {
+    final auth = context.read<AuthProvider>();
+    final userId = auth.currentUserId;
+    if (userId == null) return;
+
+    final ts = result.timestamp.toLocal().toString().split('.')[0];
+    await SecureStorageService.saveSyncMetadata(
+      userId: userId,
+      lastSyncTimestamp: ts,
+      syncStatus: result.success ? 'success' : 'failed',
+    );
+
+    if (mounted) {
+      setState(() {
+        _lastSyncStatus = 'Last sync: $ts';
+      });
+    }
+  }
+
+  Future<void> _performSync(AuthProvider auth, String action) async {
+    final syncService = _buildSyncService(auth);
+    if (syncService == null) return;
+
+    final srv = auth.authService;
+    if (srv == null) return;
+
+    setState(() => _isSyncing = true);
+
+    try {
+      SyncResult result;
+      switch (action) {
+        case 'push':
+          result = await syncService.pushChanges(wrappingKey: srv.userMasterKey);
+          break;
+        case 'pull':
+          result = await syncService.pullChanges(wrappingKey: srv.userMasterKey);
+          break;
+        default:
+          result = await syncService.fullSync(wrappingKey: srv.userMasterKey);
+      }
+
+      await _updateSyncStatus(result);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.message),
+            backgroundColor: result.success ? AppColors.success : AppColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Sync error: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSyncing = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final auth = context.read<AuthProvider>();
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -39,15 +166,15 @@ class _SyncScreenState extends State<SyncScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (!_isConfigured) _buildGitHubConfig(),
-            if (_isConfigured) _buildSyncControls(),
+            if (!_isConfigured) _buildGitHubConfig(auth),
+            if (_isConfigured) _buildSyncControls(auth),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildGitHubConfig() {
+  Widget _buildGitHubConfig(AuthProvider auth) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -115,6 +242,7 @@ class _SyncScreenState extends State<SyncScreen> {
             child: ElevatedButton(
               onPressed: () {
                 if (_tokenController.text.isNotEmpty && _ownerController.text.isNotEmpty && _repoController.text.isNotEmpty) {
+                  _saveSettings();
                   setState(() => _isConfigured = true);
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('GitHub configured'), backgroundColor: AppColors.success),
@@ -134,7 +262,7 @@ class _SyncScreenState extends State<SyncScreen> {
     );
   }
 
-  Widget _buildSyncControls() {
+  Widget _buildSyncControls(AuthProvider auth) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -177,11 +305,11 @@ class _SyncScreenState extends State<SyncScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: _syncButton('Push', Icons.upload, AppColors.primary),
+                    child: _syncButton('Push', Icons.upload, AppColors.primary, () => _performSync(auth, 'push')),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _syncButton('Pull', Icons.download, AppColors.info),
+                    child: _syncButton('Pull', Icons.download, AppColors.info, () => _performSync(auth, 'pull')),
                   ),
                 ],
               ),
@@ -189,7 +317,7 @@ class _SyncScreenState extends State<SyncScreen> {
               SizedBox(
                 width: double.infinity, height: 48,
                 child: ElevatedButton.icon(
-                  onPressed: _isSyncing ? null : _fullSync,
+                  onPressed: _isSyncing ? null : () => _performSync(auth, 'full'),
                   icon: _isSyncing
                       ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.background))
                       : const Icon(Icons.sync),
@@ -243,7 +371,7 @@ class _SyncScreenState extends State<SyncScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Center(
-                  child: Text('No sync history yet', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+                  child: Text('Sync history is tracked per sync event', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
                 ),
               ),
             ],
@@ -253,15 +381,11 @@ class _SyncScreenState extends State<SyncScreen> {
     );
   }
 
-  Widget _syncButton(String label, IconData icon, Color color) {
+  Widget _syncButton(String label, IconData icon, Color color, VoidCallback onPressed) {
     return SizedBox(
       height: 48,
       child: OutlinedButton.icon(
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('$label started'), backgroundColor: color),
-          );
-        },
+        onPressed: _isSyncing ? null : onPressed,
         icon: Icon(icon),
         label: Text(label),
         style: OutlinedButton.styleFrom(
@@ -271,19 +395,5 @@ class _SyncScreenState extends State<SyncScreen> {
         ),
       ),
     );
-  }
-
-  void _fullSync() async {
-    setState(() {
-      _isSyncing = true;
-      _lastSyncStatus = null;
-    });
-
-    await Future.delayed(const Duration(seconds: 2));
-
-    setState(() {
-      _isSyncing = false;
-      _lastSyncStatus = 'Last sync: ${DateTime.now().toLocal().toString().split('.')[0]}';
-    });
   }
 }

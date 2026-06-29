@@ -29,6 +29,13 @@ class AuthProvider extends ChangeNotifier {
   Future<void> initialize() async {
     _authService = AuthService();
     await _authService!.initialize();
+
+    // Attempt auto-login from saved session
+    final restored = await _authService!.tryAutoLogin();
+    if (restored) {
+      _isAuthenticated = true;
+      _currentUserId = _authService!.currentUserId;
+    }
     notifyListeners();
   }
 
