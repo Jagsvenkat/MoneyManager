@@ -25,11 +25,11 @@
         "provider",
         "shared_preferences",
         "timezone",
-        "uuid",
-        "workmanager"
+        "uuid"
       ],
       "devDependencies": [
         "build_runner",
+        "flutter_launcher_icons",
         "flutter_lints",
         "flutter_test",
         "hive_ce_generator",
@@ -131,6 +131,19 @@
       ]
     },
     {
+      "name": "flutter_launcher_icons",
+      "version": "0.14.4",
+      "dependencies": [
+        "args",
+        "checked_yaml",
+        "cli_util",
+        "image",
+        "json_annotation",
+        "path",
+        "yaml"
+      ]
+    },
+    {
       "name": "flutter_lints",
       "version": "6.0.0",
       "dependencies": [
@@ -179,13 +192,6 @@
       "dependencies": [
         "crypto",
         "fixnum"
-      ]
-    },
-    {
-      "name": "workmanager",
-      "version": "0.5.2",
-      "dependencies": [
-        "flutter"
       ]
     },
     {
@@ -687,6 +693,32 @@
       "dependencies": []
     },
     {
+      "name": "image",
+      "version": "4.3.0",
+      "dependencies": [
+        "archive",
+        "meta",
+        "xml"
+      ]
+    },
+    {
+      "name": "cli_util",
+      "version": "0.4.2",
+      "dependencies": [
+        "meta",
+        "path"
+      ]
+    },
+    {
+      "name": "checked_yaml",
+      "version": "2.0.4",
+      "dependencies": [
+        "json_annotation",
+        "source_span",
+        "yaml"
+      ]
+    },
+    {
       "name": "lints",
       "version": "6.1.0",
       "dependencies": []
@@ -1083,15 +1115,6 @@
       "dependencies": [
         "source_span",
         "string_scanner"
-      ]
-    },
-    {
-      "name": "checked_yaml",
-      "version": "2.0.4",
-      "dependencies": [
-        "json_annotation",
-        "source_span",
-        "yaml"
       ]
     },
     {
