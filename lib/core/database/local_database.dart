@@ -399,7 +399,29 @@ class LocalDatabaseService {
     await _categoriesDb.put(recordId, jsonEncode(envelope.toJson()));
   }
 
-  Future<List<Map<String, dynamic>>> listCategories() async {
+  Future<void> updateCategory(String id, Map<String, dynamic> data) async {
+    data['id'] = id;
+    await _categoriesDb.delete(id);
+    await createCategory(data);
+  }
+
+  Future<void> deleteCategory(String id) async {
+    await _categoriesDb.delete(id);
+  }
+
+  Future<Map<String, dynamic>?> readCategory(String id) async {
+    final envelopeJson = _categoriesDb.get(id);
+    if (envelopeJson == null) return null;
+    final envelope = EncryptionEnvelope.fromJson(
+      jsonDecode(envelopeJson) as Map<String, dynamic>,
+    );
+    return await EnvelopeEncryption.decrypt(
+      envelope: envelope,
+      wrappingKey: _wrappingKey,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> listCategories({String? type}) async {
     final categories = <Map<String, dynamic>>[];
 
     for (final envelopeJson in _categoriesDb.values) {
@@ -412,7 +434,9 @@ class LocalDatabaseService {
           envelope: envelope,
           wrappingKey: _wrappingKey,
         );
-        categories.add(category);
+        if (type == null || category['type'] == type) {
+          categories.add(category);
+        }
       } catch (_) {
         // Skip silently
       }
@@ -455,6 +479,17 @@ class LocalDatabaseService {
   }
 
   // ==== Cleanup ====
+
+  Future<void> deleteAll() async {
+    await _expensesDb.clear();
+    await _incomeDb.clear();
+    await _balanceDb.clear();
+    await _loansDb.clear();
+    await _investmentsDb.clear();
+    await _categoriesDb.clear();
+    await _syncQueueDb.clear();
+    await _conflictsDb.clear();
+  }
 
   Future<void> close() async {
     await _expensesDb.close();

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
+import 'package:intl/intl.dart';
 import 'package:money_manager/config/app_colors.dart';
 import 'package:money_manager/providers/auth_provider.dart';
 
@@ -26,6 +27,14 @@ class _InvestmentsScreenState extends State<InvestmentsScreen> {
     if (authService == null) return;
     try {
       final investments = await authService.database.listInvestments();
+      investments.sort((a, b) {
+        final da = DateTime.tryParse(a['dateTime'] as String? ?? '');
+        final db = DateTime.tryParse(b['dateTime'] as String? ?? '');
+        if (da == null && db == null) return 0;
+        if (da == null) return 1;
+        if (db == null) return -1;
+        return db.compareTo(da);
+      });
       if (mounted) setState(() { _investments = investments; _isLoading = false; });
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
@@ -48,7 +57,11 @@ class _InvestmentsScreenState extends State<InvestmentsScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _investments.isEmpty
               ? _buildEmptyState()
-              : _buildInvestmentList(),
+              : RefreshIndicator(
+                  onRefresh: _loadInvestments,
+                  color: AppColors.primary,
+                  child: _buildInvestmentList(),
+                ),
     );
   }
 
@@ -84,9 +97,10 @@ class _InvestmentsScreenState extends State<InvestmentsScreen> {
       itemCount: _investments.length,
       itemBuilder: (context, index) {
         final inv = _investments[index];
-                final units = (inv['units'] as num?)?.toDouble() ?? 0;
-                final price = (inv['pricePerUnit'] as num?)?.toDouble() ?? 0;
-                final totalValue = units * price;
+        final units = (inv['units'] as num?)?.toDouble() ?? 0;
+        final price = (inv['pricePerUnit'] as num?)?.toDouble() ?? 0;
+        final totalValue = units * price;
+        final dt = DateTime.tryParse(inv['dateTime'] as String? ?? '');
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.all(16),
@@ -110,7 +124,15 @@ class _InvestmentsScreenState extends State<InvestmentsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(inv['name'] ?? 'Investment', style: const TextStyle(color: AppColors.textPrimary, fontSize: 15)),
-                    Text('${inv['units']} units @ ₹${inv['pricePerUnit']}', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                    Row(
+                      children: [
+                        Text('${inv['units']} units @ ₹${inv['pricePerUnit']}', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                        if (dt != null) ...[
+                          const SizedBox(width: 6),
+                          Text(DateFormat('dd/MM').format(dt), style: const TextStyle(color: AppColors.textTertiary, fontSize: 10)),
+                        ],
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -126,6 +148,7 @@ class _InvestmentsScreenState extends State<InvestmentsScreen> {
     final nameCtrl = TextEditingController();
     final unitsCtrl = TextEditingController();
     final priceCtrl = TextEditingController();
+    DateTime selectedDate = DateTime.now();
     String type = 'equity';
 
     showModalBottomSheet(
@@ -150,6 +173,38 @@ class _InvestmentsScreenState extends State<InvestmentsScreen> {
               const SizedBox(height: 20),
               const Text('Add Investment', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
               const SizedBox(height: 20),
+              GestureDetector(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: selectedDate,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime.now(),
+                    builder: (ctx, child) => Theme(data: ThemeData.dark().copyWith(
+                      colorScheme: const ColorScheme.dark(primary: AppColors.primary),
+                    ), child: child!),
+                  );
+                  if (picked != null) setModalState(() => selectedDate = picked);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_today, color: AppColors.textSecondary, size: 18),
+                      const SizedBox(width: 12),
+                      Text(
+                        DateFormat('dd MMM yyyy').format(selectedDate),
+                        style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
               TextField(
                 controller: nameCtrl,
                 style: const TextStyle(color: AppColors.textPrimary),
@@ -225,16 +280,29 @@ class _InvestmentsScreenState extends State<InvestmentsScreen> {
                     if (nameCtrl.text.isEmpty || units == null || price == null) return;
                     final authService = context.read<AuthProvider>().authService;
                     if (authService == null) return;
-                    await authService.database.createInvestment({
-                      'id': const Uuid().v4(),
-                      'name': nameCtrl.text,
-                      'type': type,
-                      'units': units,
-                      'pricePerUnit': price,
-                      'dateTime': DateTime.now().toIso8601String(),
-                    });
-                    await _loadInvestments();
-                    if (ctx.mounted) Navigator.pop(ctx);
+                    try {
+                      await authService.database.createInvestment({
+                        'id': const Uuid().v4(),
+                        'name': nameCtrl.text,
+                        'type': type,
+                        'units': units,
+                        'pricePerUnit': price,
+                        'dateTime': selectedDate.toIso8601String(),
+                      });
+                      await _loadInvestments();
+                      if (ctx.mounted) {
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Investment saved'), backgroundColor: AppColors.success),
+                        );
+                      }
+                    } catch (e) {
+                      if (ctx.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                        );
+                      }
+                    }
                   },
                   child: const Text('Save Investment', style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
                 ),

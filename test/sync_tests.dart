@@ -165,7 +165,7 @@ class MockLocalDatabaseService extends LocalDatabaseService {
   Future<List<Map<String, dynamic>>> listInvestments() async => [];
 
   @override
-  Future<List<Map<String, dynamic>>> listCategories() async => [];
+  Future<List<Map<String, dynamic>>> listCategories({String? type}) async => [];
 
   @override
   Future<void> initialize({

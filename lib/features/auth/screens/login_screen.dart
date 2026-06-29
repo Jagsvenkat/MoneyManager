@@ -37,10 +37,13 @@ class _LoginScreenState extends State<LoginScreen> {
       if (success) {
         context.go('/');
       } else {
+        final msg = authProvider.error ?? 'Login failed';
+        final detail = authProvider.rawError;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(authProvider.error ?? 'Login failed'),
+            content: Text(detail != null ? '$msg\n$detail' : msg),
             backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 5),
           ),
         );
       }

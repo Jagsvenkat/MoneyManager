@@ -197,10 +197,17 @@ class AuthService {
     );
   }
 
-  /// Logout user (clear session)
+  /// Logout user (clear session, keep stored credentials for re-login)
   Future<void> logout() async {
     await _db.close();
+  }
+
+  /// Delete account — wipe all data and secure storage
+  Future<void> deleteAccount() async {
+    await _db.deleteAll();
+    await _db.close();
     await SecureStorageService.clearUserStorage(_currentUserId);
+    await SecureStorageService.clearAll();
   }
 
   // Private helper methods

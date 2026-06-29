@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
+import 'package:intl/intl.dart';
 import 'package:money_manager/config/app_colors.dart';
 import 'package:money_manager/providers/auth_provider.dart';
 
@@ -26,6 +27,14 @@ class _LoansScreenState extends State<LoansScreen> {
     if (authService == null) return;
     try {
       final loans = await authService.database.listLoans();
+      loans.sort((a, b) {
+        final da = DateTime.tryParse(a['dateTime'] as String? ?? '');
+        final db = DateTime.tryParse(b['dateTime'] as String? ?? '');
+        if (da == null && db == null) return 0;
+        if (da == null) return 1;
+        if (db == null) return -1;
+        return db.compareTo(da);
+      });
       if (mounted) setState(() { _loans = loans; _isLoading = false; });
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
@@ -48,7 +57,11 @@ class _LoansScreenState extends State<LoansScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _loans.isEmpty
               ? _buildEmptyState()
-              : _buildLoanList(),
+              : RefreshIndicator(
+                  onRefresh: _loadLoans,
+                  color: AppColors.primary,
+                  child: _buildLoanList(),
+                ),
     );
   }
 
@@ -85,6 +98,7 @@ class _LoansScreenState extends State<LoansScreen> {
       itemBuilder: (context, index) {
         final loan = _loans[index];
         final isToReceive = loan['loanType'] == 'To Receive';
+        final dt = DateTime.tryParse(loan['dateTime'] as String? ?? '');
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.all(16),
@@ -108,7 +122,15 @@ class _LoansScreenState extends State<LoansScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(loan['personName'] ?? 'Unknown', style: const TextStyle(color: AppColors.textPrimary, fontSize: 15)),
-                    Text(isToReceive ? 'To Receive' : 'To Pay', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                    Row(
+                      children: [
+                        Text(isToReceive ? 'To Receive' : 'To Pay', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                        if (dt != null) ...[
+                          const SizedBox(width: 6),
+                          Text(DateFormat('dd/MM').format(dt), style: const TextStyle(color: AppColors.textTertiary, fontSize: 10)),
+                        ],
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -123,6 +145,7 @@ class _LoansScreenState extends State<LoansScreen> {
   void _showAddLoanDialog() {
     final personCtrl = TextEditingController();
     final amountCtrl = TextEditingController();
+    DateTime selectedDate = DateTime.now();
     String loanType = 'To Receive';
 
     showModalBottomSheet(
@@ -170,6 +193,38 @@ class _LoansScreenState extends State<LoansScreen> {
                 }).toList(),
               ),
               const SizedBox(height: 16),
+              GestureDetector(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: selectedDate,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime.now(),
+                    builder: (ctx, child) => Theme(data: ThemeData.dark().copyWith(
+                      colorScheme: const ColorScheme.dark(primary: AppColors.primary),
+                    ), child: child!),
+                  );
+                  if (picked != null) setModalState(() => selectedDate = picked);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_today, color: AppColors.textSecondary, size: 18),
+                      const SizedBox(width: 12),
+                      Text(
+                        DateFormat('dd MMM yyyy').format(selectedDate),
+                        style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
               TextField(
                 controller: personCtrl,
                 style: const TextStyle(color: AppColors.textPrimary),
@@ -204,15 +259,28 @@ class _LoansScreenState extends State<LoansScreen> {
                     if (personCtrl.text.isEmpty || amount == null || amount <= 0) return;
                     final authService = context.read<AuthProvider>().authService;
                     if (authService == null) return;
-                    await authService.database.createLoan({
-                      'id': const Uuid().v4(),
-                      'personName': personCtrl.text,
-                      'amount': amount,
-                      'loanType': loanType,
-                      'dateTime': DateTime.now().toIso8601String(),
-                    });
-                    await _loadLoans();
-                    if (ctx.mounted) Navigator.pop(ctx);
+                    try {
+                      await authService.database.createLoan({
+                        'id': const Uuid().v4(),
+                        'personName': personCtrl.text,
+                        'amount': amount,
+                        'loanType': loanType,
+                        'dateTime': selectedDate.toIso8601String(),
+                      });
+                      await _loadLoans();
+                      if (ctx.mounted) {
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Loan saved'), backgroundColor: AppColors.success),
+                        );
+                      }
+                    } catch (e) {
+                      if (ctx.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                        );
+                      }
+                    }
                   },
                   child: const Text('Save Loan', style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
                 ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
+import 'package:intl/intl.dart';
 import 'package:money_manager/config/app_colors.dart';
 import 'package:money_manager/providers/auth_provider.dart';
 
@@ -26,6 +27,14 @@ class _IncomeScreenState extends State<IncomeScreen> {
     if (authService == null) return;
     try {
       final incomes = await authService.database.listIncome();
+      incomes.sort((a, b) {
+        final da = DateTime.tryParse(a['dateTime'] as String? ?? '');
+        final db = DateTime.tryParse(b['dateTime'] as String? ?? '');
+        if (da == null && db == null) return 0;
+        if (da == null) return 1;
+        if (db == null) return -1;
+        return db.compareTo(da);
+      });
       if (mounted) setState(() { _incomes = incomes; _isLoading = false; });
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
@@ -48,7 +57,11 @@ class _IncomeScreenState extends State<IncomeScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _incomes.isEmpty
               ? _buildEmptyState()
-              : _buildIncomeList(),
+              : RefreshIndicator(
+                  onRefresh: _loadIncomes,
+                  color: AppColors.primary,
+                  child: _buildIncomeList(),
+                ),
     );
   }
 
@@ -84,6 +97,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
       itemCount: _incomes.length,
       itemBuilder: (context, index) {
         final income = _incomes[index];
+        final dt = DateTime.tryParse(income['dateTime'] as String? ?? '');
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.all(16),
@@ -107,7 +121,15 @@ class _IncomeScreenState extends State<IncomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(income['source'] ?? 'Income', style: const TextStyle(color: AppColors.textPrimary, fontSize: 15)),
-                    Text(income['frequency'] ?? 'one-time', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                    Row(
+                      children: [
+                        Text(income['frequency'] ?? 'one-time', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                        if (dt != null) ...[
+                          const SizedBox(width: 6),
+                          Text(DateFormat('dd/MM').format(dt), style: const TextStyle(color: AppColors.textTertiary, fontSize: 10)),
+                        ],
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -122,6 +144,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
   void _showAddIncomeDialog() {
     final amountCtrl = TextEditingController();
     final sourceCtrl = TextEditingController();
+    DateTime selectedDate = DateTime.now();
     String frequency = 'one-time';
 
     showModalBottomSheet(
@@ -157,6 +180,38 @@ class _IncomeScreenState extends State<IncomeScreen> {
                 ),
               ),
               const Divider(color: AppColors.surfaceVariant),
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: selectedDate,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime.now(),
+                    builder: (ctx, child) => Theme(data: ThemeData.dark().copyWith(
+                      colorScheme: const ColorScheme.dark(primary: AppColors.primary),
+                    ), child: child!),
+                  );
+                  if (picked != null) setModalState(() => selectedDate = picked);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_today, color: AppColors.textSecondary, size: 18),
+                      const SizedBox(width: 12),
+                      Text(
+                        DateFormat('dd MMM yyyy').format(selectedDate),
+                        style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: sourceCtrl,
@@ -199,15 +254,28 @@ class _IncomeScreenState extends State<IncomeScreen> {
                     if (amount == null || amount <= 0) return;
                     final authService = context.read<AuthProvider>().authService;
                     if (authService == null) return;
-                    await authService.database.createIncome({
-                      'id': const Uuid().v4(),
-                      'amount': amount,
-                      'source': sourceCtrl.text,
-                      'frequency': frequency,
-                      'dateTime': DateTime.now().toIso8601String(),
-                    });
-                    await _loadIncomes();
-                    if (ctx.mounted) Navigator.pop(ctx);
+                    try {
+                      await authService.database.createIncome({
+                        'id': const Uuid().v4(),
+                        'amount': amount,
+                        'source': sourceCtrl.text,
+                        'frequency': frequency,
+                        'dateTime': selectedDate.toIso8601String(),
+                      });
+                      await _loadIncomes();
+                      if (ctx.mounted) {
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Income saved'), backgroundColor: AppColors.success),
+                        );
+                      }
+                    } catch (e) {
+                      if (ctx.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                        );
+                      }
+                    }
                   },
                   child: const Text('Save Income', style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
                 ),

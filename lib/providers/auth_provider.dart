@@ -17,11 +17,13 @@ class AuthProvider extends ChangeNotifier {
   String? _currentUserId;
   bool _isLoading = false;
   String? _error;
+  String? _rawError;
 
   bool get isAuthenticated => _isAuthenticated;
   String? get currentUserId => _currentUserId;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  String? get rawError => _rawError;
   AuthService? get authService => _authService;
 
   Future<void> initialize() async {
@@ -45,6 +47,7 @@ class AuthProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       _error = _safeErrorMessage(e);
+      _rawError = e.toString();
       _isLoading = false;
       notifyListeners();
       return false;
@@ -66,6 +69,7 @@ class AuthProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       _error = _safeErrorMessage(e);
+      _rawError = e.toString();
       _isLoading = false;
       notifyListeners();
       return false;
@@ -74,6 +78,15 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> logout() async {
     await _authService?.logout();
+    _isAuthenticated = false;
+    _currentUserId = null;
+    _error = null;
+    notifyListeners();
+  }
+
+  Future<void> deleteAccount() async {
+    if (_authService == null) return;
+    await _authService!.deleteAccount();
     _isAuthenticated = false;
     _currentUserId = null;
     _error = null;
