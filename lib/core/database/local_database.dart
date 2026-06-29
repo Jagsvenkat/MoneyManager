@@ -49,6 +49,8 @@ class LocalDatabaseService {
     _categoriesDb = await Hive.openBox<String>(_categoriesBox);
     _syncQueueDb = await Hive.openBox<Map>(_syncQueue);
     _conflictsDb = await Hive.openBox<String>(_conflictsBox);
+
+    await seedCategoriesIfEmpty();
   }
 
   // ==== Expense Operations ====
@@ -419,10 +421,12 @@ class LocalDatabaseService {
     await _categoriesDb.put(recordId, jsonEncode(envelope.toJson()));
   }
 
-  Future<void> updateCategory(String id, Map<String, dynamic> data) async {
-    data['id'] = id;
+  Future<void> updateCategory(String id, Map<String, dynamic> updates) async {
+    final currentData = await readCategory(id);
+    if (currentData == null) throw Exception('Category not found');
+    final updatedData = {...currentData, ...updates, 'id': id};
     await _categoriesDb.delete(id);
-    await createCategory(data);
+    await createCategory(updatedData);
   }
 
   Future<void> deleteCategory(String id) async {
@@ -495,6 +499,78 @@ class LocalDatabaseService {
     if (item != null) {
       item['status'] = 'synced';
       await _syncQueueDb.put(queueId, item);
+    }
+  }
+
+  // ==== Seed Default Categories ====
+
+  static const Map<String, List<Map<String, dynamic>>> defaultCategories = {
+    'expense': [
+      {'name': 'Food & Dining', 'color': 0xFFFB7185, 'tags': ['Meals', 'Snacks', 'Groceries', 'Zomato/Swiggy']},
+      {'name': 'Transport', 'color': 0xFF60A5FA, 'tags': ['Fuel', 'Bus/Train', 'Auto/Taxi', 'Metro']},
+      {'name': 'Shopping', 'color': 0xFFF472B6, 'tags': ['Clothing', 'Electronics', 'Online', 'Accessories']},
+      {'name': 'Bills & Utilities', 'color': 0xFFFBBF24, 'tags': ['Electricity', 'Water', 'Gas', 'Internet', 'Phone']},
+      {'name': 'Rent', 'color': 0xFFA78BFA, 'tags': ['Home', 'Office', 'PG']},
+      {'name': 'Entertainment', 'color': 0xFF22D3EE, 'tags': ['Movies', 'OTT', 'Games', 'Events', 'Music']},
+      {'name': 'Healthcare', 'color': 0xFF34D399, 'tags': ['Doctor', 'Medicine', 'Lab Test', 'Insurance']},
+      {'name': 'Education', 'color': 0xFF818CF8, 'tags': ['Courses', 'Books', 'Fees', 'Stationery']},
+      {'name': 'Subscriptions', 'color': 0xFFC084FC, 'tags': ['Netflix', 'Prime', 'Spotify', 'iCloud', 'YouTube']},
+      {'name': 'Travel', 'color': 0xFF06B6D4, 'tags': ['Flight', 'Hotel', 'Cab', 'Holiday']},
+      {'name': 'Insurance', 'color': 0xFF0284C7, 'tags': ['Life', 'Health', 'Vehicle', 'Term']},
+      {'name': 'Personal Care', 'color': 0xFFE879F9, 'tags': ['Salon', 'Skincare', 'Gym', 'Wellness']},
+      {'name': 'Gifts & Donations', 'color': 0xFFF59E0B, 'tags': ['Birthday', 'Charity', 'Festival']},
+      {'name': 'Home Maintenance', 'color': 0xFFFB923C, 'tags': ['Repair', 'Cleaning', 'Furniture', 'Appliances']},
+      {'name': 'Miscellaneous', 'color': 0xFF64748B, 'tags': ['ATM Fee', 'Fine', 'Other']},
+    ],
+    'income': [
+      {'name': 'Salary', 'color': 0xFF34D399, 'tags': ['Monthly', 'Bonus', 'Incentive', 'Arrears']},
+      {'name': 'Freelance', 'color': 0xFF60A5FA, 'tags': ['Project', 'Consulting', 'Contract']},
+      {'name': 'Business', 'color': 0xFFA78BFA, 'tags': ['Revenue', 'Profit', 'Commission']},
+      {'name': 'Investments', 'color': 0xFF22D3EE, 'tags': ['Dividend', 'Capital Gains', 'Interest']},
+      {'name': 'Rental Income', 'color': 0xFFFBBF24, 'tags': ['Property', 'Vehicle', 'Equipment']},
+      {'name': 'Refunds', 'color': 0xFF34D399, 'tags': ['Tax', 'Purchase', 'Deposit']},
+      {'name': 'Gifts', 'color': 0xFFF472B6, 'tags': ['Birthday', 'Festival', 'Cash Gift']},
+      {'name': 'Other Income', 'color': 0xFF64748B, 'tags': ['Cashback', 'Reimbursement', 'Misc']},
+    ],
+    'loan': [
+      {'name': 'Personal Loan', 'color': 0xFFFB7185, 'tags': []},
+      {'name': 'Home Loan', 'color': 0xFF60A5FA, 'tags': []},
+      {'name': 'Car Loan', 'color': 0xFFFBBF24, 'tags': []},
+      {'name': 'Education Loan', 'color': 0xFFA78BFA, 'tags': []},
+      {'name': 'Business Loan', 'color': 0xFF22D3EE, 'tags': []},
+      {'name': 'Credit Card', 'color': 0xFFF472B6, 'tags': []},
+      {'name': 'Friend/Family', 'color': 0xFF34D399, 'tags': []},
+      {'name': 'Other Loan', 'color': 0xFF64748B, 'tags': []},
+    ],
+    'investment': [
+      {'name': 'Stocks', 'color': 0xFF34D399, 'tags': ['Large Cap', 'Mid Cap', 'Small Cap', 'IPO']},
+      {'name': 'Mutual Funds', 'color': 0xFF60A5FA, 'tags': ['Large Cap', 'Mid Cap', 'Small Cap', 'ELSS', 'Debt']},
+      {'name': 'Fixed Deposit', 'color': 0xFFFBBF24, 'tags': ['Bank FD', 'Corporate FD', 'Recurring']},
+      {'name': 'Gold', 'color': 0xFFF59E0B, 'tags': ['Physical', 'ETF', 'Digital', 'Sovereign']},
+      {'name': 'Real Estate', 'color': 0xFFA78BFA, 'tags': ['Residential', 'Commercial', 'Land']},
+      {'name': 'Crypto', 'color': 0xFF22D3EE, 'tags': ['Bitcoin', 'Ethereum', 'Altcoin']},
+      {'name': 'PPF / EPF', 'color': 0xFF34D399, 'tags': ['PPF', 'EPF', 'VPF']},
+      {'name': 'NPS', 'color': 0xFF818CF8, 'tags': ['Tier 1', 'Tier 2']},
+      {'name': 'Bonds', 'color': 0xFFC084FC, 'tags': ['Corporate', 'Government', 'Tax Free']},
+      {'name': 'Other Investment', 'color': 0xFF64748B, 'tags': ['Crypto', 'Art', 'Collectibles']},
+    ],
+  };
+
+  Future<void> seedCategoriesIfEmpty({String? type}) async {
+    final typesToSeed = type != null ? [type] : defaultCategories.keys;
+    for (final t in typesToSeed) {
+      final existing = await listCategories(type: t);
+      if (existing.isNotEmpty) continue;
+      final defaults = defaultCategories[t] ?? [];
+      for (final cat in defaults) {
+        await createCategory({
+          'id': '${t}_${cat['name']}'.replaceAll(' ', '_').replaceAll('&', 'and'),
+          'name': cat['name'],
+          'type': t,
+          'color': cat['color'],
+          'tags': cat['tags'],
+        });
+      }
     }
   }
 

@@ -110,9 +110,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                     initialDate: selectedDate,
                     firstDate: DateTime(2000),
                     lastDate: DateTime.now(),
-                    builder: (ctx, child) => Theme(data: ThemeData.dark().copyWith(
-                      colorScheme: const ColorScheme.dark(primary: AppColors.primary),
-                    ), child: child!),
+                    builder: (ctx, child) => child!,
                   );
                   if (picked != null) setModalState(() => selectedDate = picked);
                 },
@@ -273,9 +271,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                     initialDate: selectedDate,
                     firstDate: DateTime(2000),
                     lastDate: DateTime.now(),
-                    builder: (ctx, child) => Theme(data: ThemeData.dark().copyWith(
-                      colorScheme: const ColorScheme.dark(primary: AppColors.primary),
-                    ), child: child!),
+                    builder: (ctx, child) => child!,
                   );
                   if (picked != null) setModalState(() => selectedDate = picked);
                 },

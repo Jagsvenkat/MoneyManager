@@ -46,12 +46,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         firstDate: DateTime(2020),
                         lastDate: DateTime.now(),
                         initialDateRange: _dateRange,
-                        builder: (ctx, child) => Theme(
-                          data: ThemeData.dark().copyWith(
-                            colorScheme: const ColorScheme.dark(primary: AppColors.primary),
-                          ),
-                          child: child!,
-                        ),
+                        builder: (ctx, child) => child!,
                       );
                       if (picked != null) setState(() => _dateRange = picked);
                     },
