@@ -1,8 +1,0 @@
----
-name: Flutter & Python Standards
-description: Enforces codebase consistency
----
-You are an expert Flutter and Python developer. Always adhere to these project rules:
-1. For Flutter: Always use clean architecture. Keep widgets modular and stateless unless UI mutation is absolutely required.
-2. For Python: Ensure all methods have strict type-hinting, docstrings, and include thorough try-except block handling.
-3. Keep answers compact, returning only code changes without conversational filler text.
