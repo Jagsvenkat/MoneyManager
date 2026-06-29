@@ -201,13 +201,13 @@
     },
     {
       "name": "flutter",
-      "rootUri": "file:///C:/src/flutter/packages/flutter",
+      "rootUri": "file:///C:/Users/Jagsvenkat/Desktop/Development/flutter/packages/flutter",
       "packageUri": "lib/",
       "languageVersion": "3.10"
     },
     {
       "name": "flutter_driver",
-      "rootUri": "file:///C:/src/flutter/packages/flutter_driver",
+      "rootUri": "file:///C:/Users/Jagsvenkat/Desktop/Development/flutter/packages/flutter_driver",
       "packageUri": "lib/",
       "languageVersion": "3.10"
     },
@@ -267,19 +267,19 @@
     },
     {
       "name": "flutter_test",
-      "rootUri": "file:///C:/src/flutter/packages/flutter_test",
+      "rootUri": "file:///C:/Users/Jagsvenkat/Desktop/Development/flutter/packages/flutter_test",
       "packageUri": "lib/",
       "languageVersion": "3.10"
     },
     {
       "name": "flutter_web_plugins",
-      "rootUri": "file:///C:/src/flutter/packages/flutter_web_plugins",
+      "rootUri": "file:///C:/Users/Jagsvenkat/Desktop/Development/flutter/packages/flutter_web_plugins",
       "packageUri": "lib/",
       "languageVersion": "3.10"
     },
     {
       "name": "fuchsia_remote_debug_protocol",
-      "rootUri": "file:///C:/src/flutter/packages/fuchsia_remote_debug_protocol",
+      "rootUri": "file:///C:/Users/Jagsvenkat/Desktop/Development/flutter/packages/fuchsia_remote_debug_protocol",
       "packageUri": "lib/",
       "languageVersion": "3.10"
     },
@@ -351,7 +351,7 @@
     },
     {
       "name": "integration_test",
-      "rootUri": "file:///C:/src/flutter/packages/integration_test",
+      "rootUri": "file:///C:/Users/Jagsvenkat/Desktop/Development/flutter/packages/integration_test",
       "packageUri": "lib/",
       "languageVersion": "3.10"
     },
@@ -675,7 +675,7 @@
     },
     {
       "name": "sky_engine",
-      "rootUri": "file:///C:/src/flutter/bin/cache/pkg/sky_engine",
+      "rootUri": "file:///C:/Users/Jagsvenkat/Desktop/Development/flutter/bin/cache/pkg/sky_engine",
       "packageUri": "lib/",
       "languageVersion": "3.10"
     },
@@ -862,7 +862,7 @@
   ],
   "generator": "pub",
   "generatorVersion": "3.12.0",
-  "flutterRoot": "file:///C:/src/flutter",
+  "flutterRoot": "file:///C:/Users/Jagsvenkat/Desktop/Development/flutter",
   "flutterVersion": "3.44.0",
   "pubCache": "file:///C:/Users/Jagsvenkat/AppData/Local/Pub/Cache"
 }

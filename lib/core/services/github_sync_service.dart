@@ -66,8 +66,9 @@ class GitHubSyncService {
     _dio = Dio(BaseOptions(
       baseUrl: 'https://api.github.com',
       headers: {
-        'Authorization': 'token $githubToken',
+        'Authorization': 'Bearer $githubToken',
         'Accept': 'application/vnd.github.v3+json',
+      'X-GitHub-Api-Version': '2022-11-28',
       },
     ));
   }
@@ -130,11 +131,18 @@ class GitHubSyncService {
       );
 
       return SyncResult(success: true, message: 'Push successful', recordsSync: 1);
+    } on DioException catch (e) {
+      final detail = e.response?.data is Map ? (e.response!.data as Map)['message'] ?? e.message : e.message;
+      return SyncResult(
+        success: false,
+        message: 'Push failed',
+        error: 'GitHub API error ($detail). Ensure your token has repo/contents write access.',
+      );
     } catch (e) {
       return SyncResult(
         success: false,
         message: 'Push failed',
-        error: 'Sync error: unable to push changes. Check your network and token.',
+        error: 'Sync error: $e',
       );
     }
   }
@@ -221,11 +229,18 @@ class GitHubSyncService {
         message: 'Pull successful',
         recordsSync: mergedCount,
       );
+    } on DioException catch (e) {
+      final detail = e.response?.data is Map ? (e.response!.data as Map)['message'] ?? e.message : e.message;
+      return SyncResult(
+        success: false,
+        message: 'Pull failed',
+        error: 'GitHub API error ($detail). Ensure your token has repo/contents read access.',
+      );
     } catch (e) {
       return SyncResult(
         success: false,
         message: 'Pull failed',
-        error: 'Sync error: unable to pull changes. Check your network and token.',
+        error: 'Sync error: $e',
       );
     }
   }
