@@ -81,7 +81,7 @@ class GitHubSyncService {
       repoName != null &&
       repoName!.isNotEmpty;
 
-  String get _filePath => 'users/$userId.json.enc';
+  String get _filePath => 'users/${Uri.encodeComponent(userId)}.json.enc';
 
   Future<SyncResult> pushChanges({required Uint8List wrappingKey}) async {
     if (!isConfigured) {

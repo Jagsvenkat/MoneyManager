@@ -68,9 +68,9 @@ class _SyncScreenState extends State<SyncScreen> {
     if (_tokenController.text.isEmpty || _ownerController.text.isEmpty || _repoController.text.isEmpty) return null;
 
     return GitHubSyncService(
-      githubToken: _tokenController.text,
-      repoOwner: _ownerController.text,
-      repoName: _repoController.text,
+      githubToken: _tokenController.text.trim(),
+      repoOwner: _ownerController.text.trim(),
+      repoName: _repoController.text.trim(),
       db: srv.database,
       userId: auth.currentUserId ?? '',
       deviceId: srv.deviceId,
