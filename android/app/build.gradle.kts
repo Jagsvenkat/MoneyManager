@@ -34,6 +34,17 @@ android {
     }
 }
 
+afterEvaluate {
+    tasks.findByName("assembleRelease")?.doLast {
+        val src = file("${buildDir}/outputs/flutter-apk/app-release.apk")
+        val dst = file("${buildDir}/outputs/flutter-apk/SJsaver-release.apk")
+        if (src.exists() && !dst.exists()) {
+            src.copyTo(dst)
+            println("Copied APK to SJsaver-release.apk")
+        }
+    }
+}
+
 kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
