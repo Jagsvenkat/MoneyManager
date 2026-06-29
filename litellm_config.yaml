@@ -1,0 +1,9 @@
+model_list:
+  - model_name: qwen-coder
+    litellm_params:
+      model: ollama/qwen2.5-coder:3b
+      api_base: http://localhost:11434
+
+  - model_name: gemma-chat
+    litellm_params:
+      model: ollama/gemma4
