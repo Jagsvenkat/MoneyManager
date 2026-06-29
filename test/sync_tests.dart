@@ -223,6 +223,15 @@ class MockLocalDatabaseService extends LocalDatabaseService {
   Future<Map<String, dynamic>?> readInvestment(String id) async => null;
 
   @override
+  Future<void> updateInvestment(String id, Map<String, dynamic> updates) async {}
+
+  @override
+  Future<void> deleteInvestment(String id) async {}
+
+  @override
+  Future<void> deleteLoan(String id) async {}
+
+  @override
   Future<void> createCategory(Map<String, dynamic> categoryData) async {}
 
   @override

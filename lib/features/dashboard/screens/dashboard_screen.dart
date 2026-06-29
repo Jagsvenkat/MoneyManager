@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:money_manager/config/app_colors.dart';
 import 'package:money_manager/providers/auth_provider.dart';
+import 'package:money_manager/core/services/github_sync_service.dart';
+import 'package:money_manager/core/security/secure_storage.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -21,6 +23,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedPeriod = 1;
   static const _periodOptions = [1, 3, 6, 12, 36];
   static const _periodLabels = ['1M', '3M', '6M', '1Y', '3Y'];
+  bool _isSyncing = false;
 
   @override
   void didChangeDependencies() {
@@ -87,6 +90,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _triggerSync() async {
+    if (_isSyncing) return;
+    setState(() => _isSyncing = true);
+
+    final auth = context.read<AuthProvider>();
+    final srv = auth.authService;
+    if (srv == null) { setState(() => _isSyncing = false); return; }
+
+    final token = await SecureStorageService.loadGitHubPat('sync');
+    final settings = await SecureStorageService.loadSyncSettings();
+    if (token == null || settings == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sync not configured — go to Settings'), backgroundColor: AppColors.warning),
+        );
+      }
+      setState(() => _isSyncing = false);
+      return;
+    }
+
+    final syncService = GitHubSyncService(
+      githubToken: token,
+      repoOwner: settings['owner'] as String,
+      repoName: settings['repoName'] as String,
+      db: srv.database,
+      userId: auth.currentUserId ?? '',
+      deviceId: srv.deviceId,
+    );
+
+    final result = await syncService.pushChanges(wrappingKey: srv.userMasterKey);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.success ? 'Data synced!' : 'Sync failed'),
+          backgroundColor: result.success ? AppColors.success : AppColors.error,
+        ),
+      );
+    }
+    setState(() => _isSyncing = false);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -96,6 +140,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         elevation: 0,
         title: const Text('Dashboard', style: TextStyle(color: AppColors.textPrimary)),
         actions: [
+          IconButton(
+            icon: _isSyncing
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
+                : const Icon(Icons.cloud_upload, color: AppColors.primary),
+            onPressed: _isSyncing ? null : _triggerSync,
+            tooltip: 'Sync to GitHub',
+          ),
           IconButton(
             icon: const Icon(Icons.refresh, color: AppColors.primary),
             onPressed: () { setState(() => _isLoading = true); _loadDashboard(); },

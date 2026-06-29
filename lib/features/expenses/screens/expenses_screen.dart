@@ -216,6 +216,228 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     );
   }
 
+  void _showEditExpenseDialog(Map<String, dynamic> expense) {
+    final nameCtrl = TextEditingController(text: expense['description'] as String? ?? '');
+    final amountCtrl = TextEditingController(text: expense['amount']?.toString() ?? '');
+    DateTime selectedDate = DateTime.tryParse(expense['dateTime'] as String? ?? '') ?? DateTime.now();
+    String category = expense['category'] as String? ?? (_categories.isNotEmpty ? (_categories.first['name'] as String) : 'Other');
+    String? tag = expense['tag'] as String?;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(ctx).viewInsets.bottom,
+          left: 24, right: 24, top: 24,
+        ),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: StatefulBuilder(
+          builder: (ctx, setModalState) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 20),
+              const Text('Edit Expense', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+              const SizedBox(height: 20),
+              TextField(
+                controller: nameCtrl,
+                style: const TextStyle(color: AppColors.textPrimary),
+                decoration: InputDecoration(
+                  labelText: 'Description', labelStyle: const TextStyle(color: AppColors.textSecondary),
+                  filled: true, fillColor: AppColors.surfaceVariant,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: amountCtrl,
+                keyboardType: TextInputType.number,
+                style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                decoration: const InputDecoration(
+                  hintText: '0.00', hintStyle: TextStyle(color: Colors.grey),
+                  prefixText: '₹ ', prefixStyle: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  border: InputBorder.none,
+                ),
+              ),
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: selectedDate,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime.now(),
+                    builder: (ctx, child) => Theme(data: ThemeData.dark().copyWith(
+                      colorScheme: const ColorScheme.dark(primary: AppColors.primary),
+                    ), child: child!),
+                  );
+                  if (picked != null) setModalState(() => selectedDate = picked);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_today, color: AppColors.textSecondary, size: 18),
+                      const SizedBox(width: 12),
+                      Text(
+                        DateFormat('dd MMM yyyy').format(selectedDate),
+                        style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: category,
+                dropdownColor: AppColors.surfaceVariant,
+                style: const TextStyle(color: AppColors.textPrimary),
+                decoration: InputDecoration(
+                  labelText: 'Category', labelStyle: const TextStyle(color: AppColors.textSecondary),
+                  filled: true, fillColor: AppColors.surfaceVariant,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                ),
+                items: _categories.map((c) => DropdownMenuItem(
+                  value: c['name'] as String,
+                  child: Text(c['name'] as String),
+                )).toList(),
+                onChanged: (v) => setModalState(() { category = v!; tag = null; }),
+              ),
+              if (category.isNotEmpty && _categories.any((c) => c['name'] == category && (c['tags'] as List?)?.isNotEmpty == true)) ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: tag,
+                  dropdownColor: AppColors.surfaceVariant,
+                  style: const TextStyle(color: AppColors.textPrimary),
+                  decoration: InputDecoration(
+                    labelText: 'Tag', labelStyle: const TextStyle(color: AppColors.textSecondary),
+                    filled: true, fillColor: AppColors.surfaceVariant,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                  ),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('None')),
+                    ...((_categories.firstWhere((c) => c['name'] == category)['tags'] as List? ?? []) as List<String>).map((t) => DropdownMenuItem(value: t, child: Text(t))),
+                  ],
+                  onChanged: (v) => setModalState(() => tag = v),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.error,
+                        side: const BorderSide(color: AppColors.error),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      label: const Text('Delete'),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _showDeleteConfirmDialog(expense['id'] as String);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.error,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      onPressed: () async {
+                        final amount = double.tryParse(amountCtrl.text);
+                        if (nameCtrl.text.isEmpty || amount == null || amount <= 0) return;
+                        final authService = context.read<AuthProvider>().authService;
+                        if (authService == null) return;
+                        try {
+                          await authService.database.updateExpense(expense['id'] as String, {
+                            'description': nameCtrl.text,
+                            'amount': amount,
+                            'category': category,
+                            'tag': tag,
+                            'dateTime': selectedDate.toIso8601String(),
+                          });
+                          await _loadData();
+                          if (ctx.mounted) {
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Expense updated'), backgroundColor: AppColors.success),
+                            );
+                          }
+                        } catch (e) {
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                            );
+                          }
+                        }
+                      },
+                      child: const Text('Update', style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showDeleteConfirmDialog(String id) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Delete Expense?', style: TextStyle(color: AppColors.textPrimary)),
+        content: const Text('This action cannot be undone.', style: TextStyle(color: AppColors.textSecondary)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final authService = context.read<AuthProvider>().authService;
+              if (authService == null) return;
+              try {
+                await authService.database.deleteExpense(id);
+                await _loadData();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Expense deleted'), backgroundColor: AppColors.success),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                  );
+                }
+              }
+            },
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -281,47 +503,50 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(10),
+            child: GestureDetector(
+              onTap: () => _showEditExpenseDialog(exp),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(Icons.receipt, color: color, size: 18),
                   ),
-                  child: Icon(Icons.receipt, color: color, size: 18),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(exp['description'] ?? 'Expense', style: const TextStyle(color: AppColors.textPrimary, fontSize: 14)),
-                      Row(
-                        children: [
-                          Text(cat, style: const TextStyle(color: AppColors.textTertiary, fontSize: 11)),
-                          if (tag != null) ...[
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                              decoration: BoxDecoration(
-                                color: color.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(4),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(exp['description'] ?? 'Expense', style: const TextStyle(color: AppColors.textPrimary, fontSize: 14)),
+                        Row(
+                          children: [
+                            Text(cat, style: const TextStyle(color: AppColors.textTertiary, fontSize: 11)),
+                            if (tag != null) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: color.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(tag, style: TextStyle(color: color, fontSize: 9)),
                               ),
-                              child: Text(tag, style: TextStyle(color: color, fontSize: 9)),
-                            ),
+                            ],
+                            if (dt != null) ...[
+                              const SizedBox(width: 6),
+                              Text(DateFormat('dd/MM').format(dt), style: const TextStyle(color: AppColors.textTertiary, fontSize: 10)),
+                            ],
                           ],
-                          if (dt != null) ...[
-                            const SizedBox(width: 6),
-                            Text(DateFormat('dd/MM').format(dt), style: const TextStyle(color: AppColors.textTertiary, fontSize: 10)),
-                          ],
-                        ],
-                      ),
-                    ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                Text('₹${(exp['amount'] as num?)?.toStringAsFixed(2) ?? '0.00'}', style: const TextStyle(color: AppColors.error, fontSize: 15, fontWeight: FontWeight.bold)),
-              ],
+                  Text('₹${(exp['amount'] as num?)?.toStringAsFixed(2) ?? '0.00'}', style: const TextStyle(color: AppColors.error, fontSize: 15, fontWeight: FontWeight.bold)),
+                ],
+              ),
             ),
           );
         },

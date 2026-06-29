@@ -335,6 +335,11 @@ class LocalDatabaseService {
     await _addToSyncQueue('loan', id, 'update');
   }
 
+  Future<void> deleteLoan(String id) async {
+    await _loansDb.delete(id);
+    await _addToSyncQueue('loan', id, 'delete');
+  }
+
   // ==== Investment Operations ====
 
   Future<void> createInvestment(Map<String, dynamic> investmentData) async {
@@ -383,6 +388,21 @@ class LocalDatabaseService {
     }
 
     return investments;
+  }
+
+  Future<void> updateInvestment(String id, Map<String, dynamic> updates) async {
+    final currentData = await readInvestment(id);
+    if (currentData == null) throw Exception('Investment not found');
+
+    final updatedData = {...currentData, ...updates};
+    await _investmentsDb.delete(id);
+    await createInvestment(updatedData);
+    await _addToSyncQueue('investment', id, 'update');
+  }
+
+  Future<void> deleteInvestment(String id) async {
+    await _investmentsDb.delete(id);
+    await _addToSyncQueue('investment', id, 'delete');
   }
 
   // ==== Category Operations ====

@@ -8,7 +8,8 @@ import 'package:money_manager/providers/auth_provider.dart';
 import 'package:money_manager/features/dashboard/screens/dashboard_screen.dart';
 import 'package:money_manager/features/expenses/screens/expenses_screen.dart';
 import 'package:money_manager/features/income/screens/income_screen.dart';
-import 'package:money_manager/features/sync/screens/sync_screen.dart';
+import 'package:money_manager/features/loans/screens/loans_screen.dart';
+import 'package:money_manager/features/investments/screens/investments_screen.dart';
 import 'package:money_manager/features/shared/screens/settings_screen.dart';
 
 class MainAppScreen extends StatefulWidget {
@@ -23,7 +24,8 @@ class _MainAppScreenState extends State<MainAppScreen> {
     DashboardScreen(),
     ExpensesScreen(),
     IncomeScreen(),
-    SyncScreen(),
+    LoansScreen(),
+    InvestmentsScreen(),
     SettingsScreen(),
   ];
 
@@ -52,11 +54,14 @@ class _MainAppScreenState extends State<MainAppScreen> {
           selectedItemColor: AppColors.primary,
           unselectedItemColor: AppColors.textTertiary,
           type: BottomNavigationBarType.fixed,
+          selectedFontSize: 11,
+          unselectedFontSize: 11,
           items: const [
             BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
             BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'Expenses'),
             BottomNavigationBarItem(icon: Icon(Icons.trending_up), label: 'Income'),
-            BottomNavigationBarItem(icon: Icon(Icons.sync), label: 'Sync'),
+            BottomNavigationBarItem(icon: Icon(Icons.handshake), label: 'Loans'),
+            BottomNavigationBarItem(icon: Icon(Icons.show_chart), label: 'Invest'),
             BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
           ],
         ),

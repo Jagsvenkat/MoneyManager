@@ -108,39 +108,272 @@ class _InvestmentsScreenState extends State<InvestmentsScreen> {
             color: AppColors.surface,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.tertiary.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(12),
+          child: GestureDetector(
+            onTap: () => _showEditInvestmentDialog(inv),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.tertiary.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.show_chart, color: AppColors.tertiary, size: 20),
                 ),
-                child: const Icon(Icons.show_chart, color: AppColors.tertiary, size: 20),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(inv['name'] ?? 'Investment', style: const TextStyle(color: AppColors.textPrimary, fontSize: 15)),
-                    Row(
-                      children: [
-                        Text('${inv['units']} units @ ₹${inv['pricePerUnit']}', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
-                        if (dt != null) ...[
-                          const SizedBox(width: 6),
-                          Text(DateFormat('dd/MM').format(dt), style: const TextStyle(color: AppColors.textTertiary, fontSize: 10)),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(inv['name'] ?? 'Investment', style: const TextStyle(color: AppColors.textPrimary, fontSize: 15)),
+                      Row(
+                        children: [
+                          Text('${inv['units']} units @ ₹${inv['pricePerUnit']}', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                          if (dt != null) ...[
+                            const SizedBox(width: 6),
+                            Text(DateFormat('dd/MM').format(dt), style: const TextStyle(color: AppColors.textTertiary, fontSize: 10)),
+                          ],
                         ],
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Text('₹${totalValue.toStringAsFixed(2)}', style: const TextStyle(color: AppColors.tertiary, fontSize: 16, fontWeight: FontWeight.bold)),
-            ],
+                Text('₹${totalValue.toStringAsFixed(2)}', style: const TextStyle(color: AppColors.tertiary, fontSize: 16, fontWeight: FontWeight.bold)),
+              ],
+            ),
           ),
         );
       },
+    );
+  }
+
+  void _showEditInvestmentDialog(Map<String, dynamic> inv) {
+    final nameCtrl = TextEditingController(text: inv['name'] as String? ?? '');
+    final unitsCtrl = TextEditingController(text: inv['units']?.toString() ?? '');
+    final priceCtrl = TextEditingController(text: inv['pricePerUnit']?.toString() ?? '');
+    DateTime selectedDate = DateTime.tryParse(inv['dateTime'] as String? ?? '') ?? DateTime.now();
+    String type = inv['type'] as String? ?? 'equity';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(ctx).viewInsets.bottom,
+          left: 24, right: 24, top: 24,
+        ),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: StatefulBuilder(
+          builder: (ctx, setModalState) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 20),
+              const Text('Edit Investment', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+              const SizedBox(height: 20),
+              GestureDetector(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: selectedDate,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime.now(),
+                    builder: (ctx, child) => Theme(data: ThemeData.dark().copyWith(
+                      colorScheme: const ColorScheme.dark(primary: AppColors.primary),
+                    ), child: child!),
+                  );
+                  if (picked != null) setModalState(() => selectedDate = picked);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_today, color: AppColors.textSecondary, size: 18),
+                      const SizedBox(width: 12),
+                      Text(
+                        DateFormat('dd MMM yyyy').format(selectedDate),
+                        style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: nameCtrl,
+                style: const TextStyle(color: AppColors.textPrimary),
+                decoration: InputDecoration(
+                  labelText: 'Instrument Name',
+                  labelStyle: const TextStyle(color: AppColors.textSecondary),
+                  filled: true, fillColor: AppColors.surfaceVariant,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: type,
+                dropdownColor: AppColors.surfaceVariant,
+                style: const TextStyle(color: AppColors.textPrimary),
+                decoration: InputDecoration(
+                  labelText: 'Type',
+                  labelStyle: const TextStyle(color: AppColors.textSecondary),
+                  filled: true, fillColor: AppColors.surfaceVariant,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'equity', child: Text('Equity')),
+                  DropdownMenuItem(value: 'mutual_fund', child: Text('Mutual Fund')),
+                  DropdownMenuItem(value: 'commodity', child: Text('Commodity')),
+                  DropdownMenuItem(value: 'crypto', child: Text('Crypto')),
+                ],
+                onChanged: (v) => setModalState(() => type = v!),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: unitsCtrl,
+                      keyboardType: TextInputType.number,
+                      style: const TextStyle(color: AppColors.textPrimary),
+                      decoration: InputDecoration(
+                        labelText: 'Units',
+                        labelStyle: const TextStyle(color: AppColors.textSecondary),
+                        filled: true, fillColor: AppColors.surfaceVariant,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: priceCtrl,
+                      keyboardType: TextInputType.number,
+                      style: const TextStyle(color: AppColors.textPrimary),
+                      decoration: InputDecoration(
+                        labelText: 'Price/Unit',
+                        labelStyle: const TextStyle(color: AppColors.textSecondary),
+                        filled: true, fillColor: AppColors.surfaceVariant,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.error,
+                        side: const BorderSide(color: AppColors.error),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      label: const Text('Delete'),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _showDeleteInvestmentConfirm(inv['id'] as String);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.tertiary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      onPressed: () async {
+                        final units = double.tryParse(unitsCtrl.text);
+                        final price = double.tryParse(priceCtrl.text);
+                        if (nameCtrl.text.isEmpty || units == null || price == null) return;
+                        final authService = context.read<AuthProvider>().authService;
+                        if (authService == null) return;
+                        try {
+                          await authService.database.updateInvestment(inv['id'] as String, {
+                            'name': nameCtrl.text,
+                            'type': type,
+                            'units': units,
+                            'pricePerUnit': price,
+                            'dateTime': selectedDate.toIso8601String(),
+                          });
+                          await _loadInvestments();
+                          if (ctx.mounted) {
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Investment updated'), backgroundColor: AppColors.success),
+                            );
+                          }
+                        } catch (e) {
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                            );
+                          }
+                        }
+                      },
+                      child: const Text('Update', style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showDeleteInvestmentConfirm(String id) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Delete Investment?', style: TextStyle(color: AppColors.textPrimary)),
+        content: const Text('This action cannot be undone.', style: TextStyle(color: AppColors.textSecondary)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final authService = context.read<AuthProvider>().authService;
+              if (authService == null) return;
+              try {
+                await authService.database.deleteInvestment(id);
+                await _loadInvestments();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Investment deleted'), backgroundColor: AppColors.success),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                  );
+                }
+              }
+            },
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
     );
   }
 

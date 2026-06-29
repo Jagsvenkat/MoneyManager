@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:money_manager/config/app_colors.dart';
 import 'package:money_manager/providers/auth_provider.dart';
 import 'package:money_manager/config/app_routes.dart';
+import 'package:money_manager/core/security/secure_storage.dart';
 import 'package:intl/intl.dart';
 import 'package:excel/excel.dart';
 import 'package:path_provider/path_provider.dart';
@@ -53,6 +54,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSection('Data', [
             _buildSettingTile(Icons.file_download, 'Export Data', 'View summary', onTap: () => _exportData(authProvider)),
             _buildSettingTile(Icons.file_upload, 'Import Data', 'From backup', onTap: () => _showImportDialog()),
+          ]),
+          const SizedBox(height: 16),
+          _buildSection('Backup', [
+            _buildSettingTile(Icons.cloud_sync, 'GitHub Sync', 'Configure cloud backup', onTap: () => _showSyncConfigDialog()),
           ]),
           const SizedBox(height: 16),
           _buildSection('About', [
@@ -281,6 +286,97 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  void _showSyncConfigDialog() {
+    final tokenCtrl = TextEditingController();
+    final ownerCtrl = TextEditingController();
+    final repoCtrl = TextEditingController();
+    bool tokenVisible = false;
+
+    _loadSyncSettings(tokenCtrl, ownerCtrl, repoCtrl);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text('GitHub Sync', style: TextStyle(color: AppColors.textPrimary)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Configure your GitHub repo for encrypted cloud backup.', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: tokenCtrl,
+                  obscureText: !tokenVisible,
+                  style: const TextStyle(color: AppColors.textPrimary),
+                  decoration: InputDecoration(
+                    labelText: 'Personal Access Token',
+                    labelStyle: const TextStyle(color: AppColors.textSecondary),
+                    filled: true, fillColor: AppColors.surfaceVariant,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    suffixIcon: IconButton(
+                      icon: Icon(tokenVisible ? Icons.visibility : Icons.visibility_off, color: AppColors.textSecondary),
+                      onPressed: () => setDialogState(() => tokenVisible = !tokenVisible),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: ownerCtrl,
+                  style: const TextStyle(color: AppColors.textPrimary),
+                  decoration: InputDecoration(
+                    labelText: 'Repo Owner (username)',
+                    labelStyle: const TextStyle(color: AppColors.textSecondary),
+                    filled: true, fillColor: AppColors.surfaceVariant,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: repoCtrl,
+                  style: const TextStyle(color: AppColors.textPrimary),
+                  decoration: InputDecoration(
+                    labelText: 'Repo Name',
+                    labelStyle: const TextStyle(color: AppColors.textSecondary),
+                    filled: true, fillColor: AppColors.surfaceVariant,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary))),
+            TextButton(
+              onPressed: () async {
+                await SecureStorageService.saveGitHubPat(userId: 'sync', encryptedPat: tokenCtrl.text.trim());
+                await SecureStorageService.saveSyncSettings(owner: ownerCtrl.text.trim(), repoName: repoCtrl.text.trim());
+                if (ctx.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Sync settings saved'), backgroundColor: AppColors.success),
+                  );
+                }
+              },
+              child: const Text('Save', style: TextStyle(color: AppColors.primary)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _loadSyncSettings(TextEditingController tokenCtrl, TextEditingController ownerCtrl, TextEditingController repoCtrl) async {
+    final token = await SecureStorageService.loadGitHubPat('sync');
+    final settings = await SecureStorageService.loadSyncSettings();
+    if (token != null) tokenCtrl.text = token;
+    if (settings != null) {
+      ownerCtrl.text = settings['owner'] as String? ?? '';
+      repoCtrl.text = settings['repoName'] as String? ?? '';
+    }
   }
 
   void _confirmDeleteAccount(AuthProvider authProvider) {
