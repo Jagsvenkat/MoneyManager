@@ -188,7 +188,12 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                   Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(2)))),
                   const SizedBox(height: 20),
                   Text('Add Expense', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: cs.onSurface)),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                   TextField(
                     controller: nameCtrl,
                     style: TextStyle(color: cs.onSurface),
@@ -291,7 +296,12 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                     metadata: metadata,
                     onChanged: () => setModalState(() {}),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 8),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity, height: 56,
                     child: ElevatedButton(
@@ -376,7 +386,12 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                   Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(2)))),
                   const SizedBox(height: 20),
                   Text('Edit Expense', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: cs.onSurface)),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                   TextField(
                     controller: nameCtrl,
                     style: TextStyle(color: cs.onSurface),
@@ -479,7 +494,12 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                     metadata: metadata,
                     onChanged: () => setModalState(() {}),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(

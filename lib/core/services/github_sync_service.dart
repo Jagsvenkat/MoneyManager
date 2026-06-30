@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import '../database/local_database.dart';
@@ -173,7 +174,14 @@ class GitHubSyncService {
   /// Start the OAuth Device Authorization Flow.
   /// Returns a [DeviceFlowResponse] with the user code and verification URL.
   /// The caller should display these to the user.
+  /// Throws [UnsupportedError] on web — OAuth device flow requires native networking.
   Future<DeviceFlowResponse> startDeviceFlow() async {
+    if (kIsWeb) {
+      throw UnsupportedError(
+        'GitHub OAuth on web requires a secure backend/proxy. '
+        'Use a Personal Access Token (PAT) instead, or configure backend OAuth.',
+      );
+    }
     final response = await Dio().post(
       'https://github.com/login/device/code',
       data: {
@@ -191,7 +199,14 @@ class GitHubSyncService {
   /// Poll for the OAuth token after the user has authorized the device.
   /// Returns the [OAuthTokenResponse] when the user authorizes, or null if still waiting.
   /// Throws on expiry, access denied, or error.
+  /// Throws [UnsupportedError] on web — token exchange requires a backend proxy.
   Future<OAuthTokenResponse?> pollForToken(String deviceCode) async {
+    if (kIsWeb) {
+      throw UnsupportedError(
+        'GitHub OAuth token exchange is not supported on web. '
+        'Use a Personal Access Token (PAT) instead, or configure backend OAuth.',
+      );
+    }
     final response = await Dio().post(
       'https://github.com/login/oauth/access_token',
       data: {

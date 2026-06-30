@@ -21,8 +21,8 @@ class ExcelReportService {
   static const String surfaceHex = 'FF161A22';
   static const String headerBgHex = 'FF1E2430';
   static const String headerTextHex = 'FFE2E8F0';
-  static const String textPrimaryHex = 'FFE2E8F0';
-  static const String textSecondaryHex = 'FF94A3B8';
+  static const String textPrimaryHex = 'FF000000';
+  static const String textSecondaryHex = 'FF000000';
   static const String successHex = 'FF34D399';
   static const String errorHex = 'FFFB7185';
   static const String warningHex = 'FFFBBF24';

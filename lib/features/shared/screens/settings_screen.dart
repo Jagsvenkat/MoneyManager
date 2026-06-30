@@ -12,6 +12,7 @@ import 'package:money_manager/providers/auth_provider.dart';
 import 'package:money_manager/providers/app_provider.dart';
 import 'package:money_manager/config/app_routes.dart';
 import 'package:money_manager/core/security/secure_storage.dart';
+import 'package:dio/dio.dart';
 import 'package:money_manager/core/services/github_sync_service.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
@@ -955,27 +956,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // OAuth / PAT toggle
-                    if (!isOAuthFlow && !oauthExpired) Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () async {
-                              setDialogState(() { isOAuthFlow = true; oauthExpired = false; });
-                              await _startOAuthFlow(
-                                ctx, setDialogState, cs, authProvider,
-                                ownerCtrl.text.trim(), repoCtrl.text.trim(),
-                                (code, uri) { oauthUserCode = code; oauthVerificationUri = uri; },
-                                (expired) { oauthExpired = expired; },
-                              );
-                            },
-                            icon: Icon(Icons.login, size: 18),
-                            label: Text('Login with GitHub', style: TextStyle(fontSize: 13)),
-                            style: OutlinedButton.styleFrom(foregroundColor: cs.primary),
-                          ),
+                    // OAuth section
+                    if (kIsWeb && !isOAuthFlow && !oauthExpired) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: cs.error.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                      ],
-                    ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.info_outline, color: cs.error, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'OAuth login not available on web. Use PAT below.',
+                                style: TextStyle(color: cs.error, fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ] else if (!isOAuthFlow && !oauthExpired) ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                setDialogState(() { isOAuthFlow = true; oauthExpired = false; });
+                                await _startOAuthFlow(
+                                  ctx, setDialogState, cs, authProvider,
+                                  ownerCtrl.text.trim(), repoCtrl.text.trim(),
+                                  (code, uri) { oauthUserCode = code; oauthVerificationUri = uri; },
+                                  (expired) { oauthExpired = expired; },
+                                  () { setDialogState(() { usePat = true; oauthExpired = true; }); },
+                                );
+                              },
+                              icon: Icon(Icons.login, size: 18),
+                              label: Text('Login with GitHub', style: TextStyle(fontSize: 13)),
+                              style: OutlinedButton.styleFrom(foregroundColor: cs.primary),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
 
                     if (isOAuthFlow && !oauthExpired) ...[
                       Container(
@@ -1254,12 +1280,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
     String repoName,
     void Function(String, String) setCodes,
     void Function(bool) setExpired,
+    VoidCallback onUsePat,
   ) async {
     try {
       final srv = authProvider.authService;
       if (srv == null) { setExpired(true); setDialogState(() {}); return; }
 
-      const oauthClientId = 'Iv23li0VnDhVh0ITNcNP'; // Replace with real OAuth App client ID
+      if (kIsWeb) {
+        if (ctx.mounted) {
+          ScaffoldMessenger.of(ctx).showSnackBar(
+            SnackBar(
+              content: const Text('OAuth not available on web. Use PAT instead.'),
+              backgroundColor: cs.error,
+              duration: const Duration(seconds: 5),
+              action: SnackBarAction(
+                label: 'Use PAT',
+                textColor: Colors.white,
+                onPressed: () {
+                  setExpired(true);
+                  onUsePat();
+                },
+              ),
+            ),
+          );
+        }
+        setExpired(true);
+        setDialogState(() {});
+        return;
+      }
+
+      const oauthClientId = 'Iv23li0VnDhVh0ITNcNP';
 
       final syncService = GitHubSyncService(
         githubToken: null,
@@ -1298,12 +1348,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               );
             }
 
-            // Get the authenticated GitHub username
             final authedService = syncService.withOAuthToken(token);
             final githubUser = await authedService.getCurrentUser();
 
             if (ctx.mounted) {
-              // Show repo picker step
               final repoResult = await _showRepoPickerDialog(
                 ctx,
                 cs,
@@ -1325,7 +1373,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   );
                 }
               } else {
-                // User cancelled repo picker — clear OAuth token so they can retry
                 await SecureStorageService.deleteGitHubCredentials(userId);
                 ScaffoldMessenger.of(ctx).showSnackBar(
                   const SnackBar(content: Text('Sync repo not configured. You can set it up later.'), backgroundColor: AppColors.warning),
@@ -1341,19 +1388,104 @@ class _SettingsScreenState extends State<SettingsScreen> {
             setDialogState(() {});
             return;
           }
+          // On web, Dio connection errors from OAuth polling should show a clear message
+          if (kIsWeb && e is DioException &&
+              (e.type == DioExceptionType.connectionError || e.type == DioExceptionType.connectionTimeout)) {
+            if (ctx.mounted) {
+              ScaffoldMessenger.of(ctx).showSnackBar(
+                SnackBar(
+                  content: const Text('OAuth failed because browser blocked the GitHub request. Use PAT or backend OAuth.'),
+                  backgroundColor: cs.error,
+                  duration: const Duration(seconds: 6),
+                  action: SnackBarAction(
+                    label: 'Use PAT',
+                    textColor: Colors.white,
+                    onPressed: () {
+                      setExpired(true);
+                      onUsePat();
+                    },
+                  ),
+                ),
+              );
+            }
+            setExpired(true);
+            setDialogState(() {});
+            return;
+          }
           pollInterval = (pollInterval * 1.5).round();
         }
       }
 
       setExpired(true);
       setDialogState(() {});
-    } catch (e) {
+    } on UnsupportedError catch (e) {
       if (ctx.mounted) {
-        final ctxCs = Theme.of(ctx).colorScheme;
         ScaffoldMessenger.of(ctx).showSnackBar(
-          SnackBar(content: Text('OAuth failed: $e'), backgroundColor: ctxCs.error),
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: cs.error,
+            duration: const Duration(seconds: 6),
+            action: SnackBarAction(
+              label: 'Use PAT',
+              textColor: Colors.white,
+              onPressed: () {
+                setExpired(true);
+                onUsePat();
+              },
+            ),
+          ),
         );
       }
+      setExpired(true);
+      setDialogState(() {});
+    } on DioException catch (e) {
+      if (ctx.mounted) {
+        String msg;
+        if (e.type == DioExceptionType.connectionError || e.type == DioExceptionType.connectionTimeout) {
+          msg = 'Network error: Check your internet connection.';
+        } else if (e.response?.statusCode == 401) {
+          msg = 'OAuth failed: Invalid client configuration.';
+        } else {
+          msg = 'OAuth request failed. Use PAT instead.';
+        }
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: cs.error,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'Use PAT',
+              textColor: Colors.white,
+              onPressed: () {
+                setExpired(true);
+                onUsePat();
+              },
+            ),
+          ),
+        );
+      }
+      setExpired(true);
+      setDialogState(() {});
+    } catch (e) {
+      if (ctx.mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          SnackBar(
+            content: Text('OAuth failed: ${e.toString().replaceAll('Exception: ', '')}'),
+            backgroundColor: cs.error,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'Use PAT',
+              textColor: Colors.white,
+              onPressed: () {
+                setExpired(true);
+                onUsePat();
+              },
+            ),
+          ),
+        );
+      }
+      setExpired(true);
+      setDialogState(() {});
     }
   }
 
