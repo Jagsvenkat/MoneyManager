@@ -768,11 +768,13 @@ class LocalDatabaseService {
     final typesToSeed = type != null ? [type] : defaultCategories.keys;
     for (final t in typesToSeed) {
       final existing = await listCategories(type: t);
-      if (existing.isNotEmpty) continue;
+      final existingIds = existing.map((c) => c['id'] as String?).toSet();
       final defaults = defaultCategories[t] ?? [];
       for (final cat in defaults) {
+        final id = '${t}_${cat['name']}'.replaceAll(' ', '_').replaceAll('&', 'and');
+        if (existingIds.contains(id)) continue;
         await createCategory({
-          'id': '${t}_${cat['name']}'.replaceAll(' ', '_').replaceAll('&', 'and'),
+          'id': id,
           'name': cat['name'],
           'type': t,
           'color': cat['color'],
