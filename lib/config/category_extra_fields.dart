@@ -150,6 +150,11 @@ const Map<String, List<Map<String, dynamic>>> categoryExtraFields = {
     {'key': 'grams', 'label': 'Grams', 'type': 'number'},
     {'key': 'purchaseRate', 'label': 'Purchase Rate', 'type': 'number'},
   ],
+  'Silver': [
+    {'key': 'silverType', 'label': 'Silver Type', 'type': 'select', 'options': ['Physical', 'ETF', 'Digital']},
+    {'key': 'grams', 'label': 'Grams', 'type': 'number'},
+    {'key': 'purchaseRate', 'label': 'Purchase Rate', 'type': 'number'},
+  ],
   'Real Estate': [
     {'key': 'propertyName', 'label': 'Property Name', 'type': 'text'},
     {'key': 'location', 'label': 'Location', 'type': 'text'},

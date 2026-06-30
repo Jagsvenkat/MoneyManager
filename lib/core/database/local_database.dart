@@ -756,6 +756,7 @@ class LocalDatabaseService {
       {'name': 'Mutual Funds', 'color': 0xFF60A5FA, 'tags': ['Large Cap', 'Mid Cap', 'Small Cap', 'ELSS', 'Debt']},
       {'name': 'Fixed Deposit', 'color': 0xFFFBBF24, 'tags': ['Bank FD', 'Corporate FD', 'Recurring']},
       {'name': 'Gold', 'color': 0xFFF59E0B, 'tags': ['Physical', 'ETF', 'Digital', 'Sovereign']},
+      {'name': 'Silver', 'color': 0xFF9CA3AF, 'tags': ['Physical', 'ETF', 'Digital']},
       {'name': 'Real Estate', 'color': 0xFFA78BFA, 'tags': ['Residential', 'Commercial', 'Land']},
       {'name': 'Crypto', 'color': 0xFF22D3EE, 'tags': ['Bitcoin', 'Ethereum', 'Altcoin']},
       {'name': 'PPF / EPF', 'color': 0xFF34D399, 'tags': ['PPF', 'EPF', 'VPF']},

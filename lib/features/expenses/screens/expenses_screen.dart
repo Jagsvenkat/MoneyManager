@@ -182,7 +182,6 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
               final cs = Theme.of(ctx).colorScheme;
               final suggestions = _amountSuggestionsForCategory(category);
               return Column(
-                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(2)))),
@@ -380,7 +379,6 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
               final cs = Theme.of(ctx).colorScheme;
               final suggestions = _amountSuggestionsForCategory(category);
               return Column(
-                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(2)))),
