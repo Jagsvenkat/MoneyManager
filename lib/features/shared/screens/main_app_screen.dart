@@ -196,7 +196,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
                   ),
                   items: [
                     const DropdownMenuItem(value: null, child: Text('None')),
-                    ...((categories.firstWhere((c) => c['name'] == category)['tags'] as List<String>? ?? [])).map<DropdownMenuItem<String>>((tag) {
+                    ...((categories.firstWhere((c) => c['name'] == category)['tags'] as List<dynamic>? ?? []).cast<String>()).map<DropdownMenuItem<String>>((tag) {
                       return DropdownMenuItem(value: tag, child: Text(tag));
                     }),
                   ],

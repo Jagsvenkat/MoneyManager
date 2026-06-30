@@ -213,7 +213,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       ),
                       items: [
                         const DropdownMenuItem(value: null, child: Text('None')),
-                        ...((_categories.firstWhere((c) => c['name'] == category)['tags'] as List? ?? []) as List<String>).map((t) => DropdownMenuItem(value: t, child: Text(t))),
+                        ...((_categories.firstWhere((c) => c['name'] == category)['tags'] as List<dynamic>? ?? []).cast<String>()).map((t) => DropdownMenuItem(value: t, child: Text(t))),
                       ],
                       onChanged: (v) => setModalState(() => tag = v),
                     ),
@@ -406,7 +406,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       ),
                       items: [
                         const DropdownMenuItem(value: null, child: Text('None')),
-                        ...((_categories.firstWhere((c) => c['name'] == category)['tags'] as List? ?? []) as List<String>).map((t) => DropdownMenuItem(value: t, child: Text(t))),
+                        ...((_categories.firstWhere((c) => c['name'] == category)['tags'] as List<dynamic>? ?? []).cast<String>()).map((t) => DropdownMenuItem(value: t, child: Text(t))),
                       ],
                       onChanged: (v) => setModalState(() => tag = v),
                     ),
