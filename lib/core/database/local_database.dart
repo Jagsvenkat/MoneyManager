@@ -714,7 +714,8 @@ class LocalDatabaseService {
   static const Map<String, List<Map<String, dynamic>>> defaultCategories = {
     'expense': [
       {'name': 'Food & Dining', 'color': 0xFFFB7185, 'tags': ['Meals', 'Snacks', 'Groceries', 'Zomato/Swiggy']},
-      {'name': 'Transport', 'color': 0xFF60A5FA, 'tags': ['Fuel', 'Bus/Train', 'Auto/Taxi', 'Metro']},
+      {'name': 'Fuel', 'color': 0xFFF97316, 'tags': ['Petrol', 'Diesel', 'CNG', 'EV Charging', 'Full Tank', 'Top-up']},
+      {'name': 'Transport', 'color': 0xFF60A5FA, 'tags': ['Bus/Train', 'Auto/Taxi', 'Metro']},
       {'name': 'Shopping', 'color': 0xFFF472B6, 'tags': ['Clothing', 'Electronics', 'Online', 'Accessories']},
       {'name': 'Bills & Utilities', 'color': 0xFFFBBF24, 'tags': ['Electricity', 'Water', 'Gas', 'Internet', 'Phone']},
       {'name': 'Rent', 'color': 0xFFA78BFA, 'tags': ['Home', 'Office', 'PG']},

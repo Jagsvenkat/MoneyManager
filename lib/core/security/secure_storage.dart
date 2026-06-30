@@ -138,7 +138,7 @@ class SecureStorageService {
   /// Save GitHub PAT (encrypted with UMK)
   static Future<void> saveGitHubPat({
     required String userId,
-    required String encryptedPat, // base64 encoded
+    required String encryptedPat,
   }) async {
     await _provider.save('github_pat_$userId', encryptedPat);
   }
@@ -146,6 +146,42 @@ class SecureStorageService {
   /// Load encrypted GitHub PAT
   static Future<String?> loadGitHubPat(String userId) async {
     return await _provider.read('github_pat_$userId');
+  }
+
+  /// Save GitHub OAuth access token (encrypted)
+  static Future<void> saveGitHubOAuthToken({
+    required String userId,
+    required String token,
+  }) async {
+    await _provider.save('github_oauth_$userId', token);
+  }
+
+  /// Load GitHub OAuth access token
+  static Future<String?> loadGitHubOAuthToken(String userId) async {
+    return await _provider.read('github_oauth_$userId');
+  }
+
+  /// Save GitHub OAuth token expiry
+  static Future<void> saveGitHubOAuthExpiry({
+    required String userId,
+    required DateTime expiry,
+  }) async {
+    await _provider.save('github_oauth_expiry_$userId', expiry.toIso8601String());
+  }
+
+  /// Load GitHub OAuth token expiry
+  static Future<DateTime?> loadGitHubOAuthExpiry(String userId) async {
+    final raw = await _provider.read('github_oauth_expiry_$userId');
+    if (raw == null) return null;
+    return DateTime.tryParse(raw);
+  }
+
+  /// Delete GitHub credentials for a user
+  static Future<void> deleteGitHubCredentials(String userId) async {
+    await _provider.delete('github_pat_$userId');
+    await _provider.delete('github_oauth_$userId');
+    await _provider.delete('github_oauth_expiry_$userId');
+    await _provider.delete('sync_metadata_$userId');
   }
 
   /// Save device ID (public, not sensitive)
@@ -178,12 +214,11 @@ class SecureStorageService {
     return jsonDecode(data) as Map<String, dynamic>;
   }
 
-  /// Clear all storage for a user (on logout)
+  /// Clear all storage for a user (on logout).
+  /// Does NOT clear GitHub credentials — user must choose "Clear Credentials" explicitly.
   static Future<void> clearUserStorage(String userId) async {
     await _provider.delete('kdf_params_$userId');
     await _provider.delete('umk_$userId');
-    await _provider.delete('github_pat_$userId');
-    await _provider.delete('sync_metadata_$userId');
   }
 
   /// Save last logged-in user ID (for auto-login)
@@ -223,12 +258,19 @@ class SecureStorageService {
     await _provider.delete('session_umk');
   }
 
-  /// Save GitHub sync settings (owner, repo name)
+  /// Save GitHub sync settings (owner, repo name, branch, GitHub username)
   static Future<void> saveSyncSettings({
     required String owner,
     required String repoName,
+    String branch = 'main',
+    String? githubUsername,
   }) async {
-    final data = {'owner': owner, 'repoName': repoName};
+    final data = {
+      'owner': owner,
+      'repoName': repoName,
+      'branch': branch,
+      if (githubUsername != null) 'githubUsername': githubUsername,
+    };
     await _provider.save('sync_settings', jsonEncode(data));
   }
 

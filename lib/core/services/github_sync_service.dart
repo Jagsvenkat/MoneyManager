@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
@@ -12,6 +13,7 @@ class SyncResult {
   final int conflicts;
   final String? error;
   final DateTime timestamp;
+  final SyncStatus status;
 
   SyncResult({
     required this.success,
@@ -20,7 +22,19 @@ class SyncResult {
     this.conflicts = 0,
     this.error,
     DateTime? timestamp,
+    this.status = SyncStatus.unknown,
   }) : timestamp = timestamp ?? DateTime.now().toUtc();
+}
+
+enum SyncStatus {
+  notConfigured,
+  connected,
+  tokenExpired,
+  tokenRevoked,
+  repoNotFound,
+  missingPermission,
+  networkUnavailable,
+  unknown,
 }
 
 class RepositoryInfo {
@@ -49,6 +63,72 @@ class RepositoryInfo {
   }
 }
 
+/// Result of a Test Connection
+class ConnectionTestResult {
+  final bool success;
+  final String message;
+  final SyncStatus status;
+  final RepositoryInfo? repo;
+
+  ConnectionTestResult({
+    required this.success,
+    required this.message,
+    this.status = SyncStatus.unknown,
+    this.repo,
+  });
+}
+
+/// OAuth Device Flow response from GitHub
+class DeviceFlowResponse {
+  final String deviceCode;
+  final String userCode;
+  final String verificationUri;
+  final int expiresIn;
+  final int interval;
+
+  DeviceFlowResponse({
+    required this.deviceCode,
+    required this.userCode,
+    required this.verificationUri,
+    required this.expiresIn,
+    required this.interval,
+  });
+
+  factory DeviceFlowResponse.fromJson(Map<String, dynamic> json) {
+    return DeviceFlowResponse(
+      deviceCode: json['device_code'] as String,
+      userCode: json['user_code'] as String,
+      verificationUri: json['verification_uri'] as String,
+      expiresIn: json['expires_in'] as int,
+      interval: json['interval'] as int? ?? 5,
+    );
+  }
+}
+
+/// OAuth token response
+class OAuthTokenResponse {
+  final String accessToken;
+  final String? tokenType;
+  final String? scope;
+  final int? expiresIn;
+
+  OAuthTokenResponse({
+    required this.accessToken,
+    this.tokenType,
+    this.scope,
+    this.expiresIn,
+  });
+
+  factory OAuthTokenResponse.fromJson(Map<String, dynamic> json) {
+    return OAuthTokenResponse(
+      accessToken: json['access_token'] as String,
+      tokenType: json['token_type'] as String?,
+      scope: json['scope'] as String?,
+      expiresIn: json['expires_in'] as int?,
+    );
+  }
+}
+
 class GitHubSyncService {
   final String? githubToken;
   final String? repoOwner;
@@ -56,6 +136,7 @@ class GitHubSyncService {
   final LocalDatabaseService db;
   final String userId;
   final String deviceId;
+  final String? oauthClientId;
   late final Dio _dio;
 
   GitHubSyncService({
@@ -65,6 +146,7 @@ class GitHubSyncService {
     required this.db,
     required this.userId,
     required this.deviceId,
+    this.oauthClientId,
   }) {
     _dio = Dio(BaseOptions(
       baseUrl: 'https://api.github.com',
@@ -86,12 +168,179 @@ class GitHubSyncService {
 
   String get _filePath => 'users/${Uri.encodeComponent(userId)}.json.enc';
 
+  // ========== OAuth Device Authorization Flow ==========
+
+  /// Start the OAuth Device Authorization Flow.
+  /// Returns a [DeviceFlowResponse] with the user code and verification URL.
+  /// The caller should display these to the user.
+  Future<DeviceFlowResponse> startDeviceFlow() async {
+    final response = await Dio().post(
+      'https://github.com/login/device/code',
+      data: {
+        'client_id': oauthClientId,
+        'scope': 'repo',
+      },
+      options: Options(
+        contentType: 'application/json',
+        headers: {'Accept': 'application/json'},
+      ),
+    );
+    return DeviceFlowResponse.fromJson(response.data);
+  }
+
+  /// Poll for the OAuth token after the user has authorized the device.
+  /// Returns the [OAuthTokenResponse] when the user authorizes, or null if still waiting.
+  /// Throws on expiry, access denied, or error.
+  Future<OAuthTokenResponse?> pollForToken(String deviceCode) async {
+    final response = await Dio().post(
+      'https://github.com/login/oauth/access_token',
+      data: {
+        'client_id': oauthClientId,
+        'device_code': deviceCode,
+        'grant_type': 'urn:ietf:params:oauth:grant-type:device_code',
+      },
+      options: Options(
+        contentType: 'application/json',
+        headers: {'Accept': 'application/json'},
+      ),
+    );
+
+    final data = response.data as Map<String, dynamic>;
+    final error = data['error'] as String?;
+
+    if (error == null) {
+      return OAuthTokenResponse.fromJson(data);
+    }
+
+    if (error == 'authorization_pending') {
+      return null; // Still waiting — caller should retry after interval
+    }
+
+    if (error == 'slow_down') {
+      return null; // Caller should increase polling interval
+    }
+
+    if (error == 'expired_token') {
+      throw Exception('Device code expired. Please restart the login flow.');
+    }
+
+    if (error == 'access_denied') {
+      throw Exception('Authorization denied by user.');
+    }
+
+    throw Exception('OAuth error: $error');
+  }
+
+  /// Exchange an OAuth access token for the current service instance.
+  /// Returns a new [GitHubSyncService] with the OAuth token.
+  GitHubSyncService withOAuthToken(String token) {
+    return GitHubSyncService(
+      githubToken: token,
+      repoOwner: repoOwner,
+      repoName: repoName,
+      db: db,
+      userId: userId,
+      deviceId: deviceId,
+      oauthClientId: oauthClientId,
+    );
+  }
+
+  // ========== Test Connection ==========
+
+  /// Test the GitHub connection configuration.
+  /// Validates: token is valid, repo exists, repo is accessible, token has contents access.
+  Future<ConnectionTestResult> testConnection() async {
+    if (!isConfigured) {
+      return ConnectionTestResult(
+        success: false,
+        message: 'GitHub not configured. Provide token, owner, and repo name.',
+        status: SyncStatus.notConfigured,
+      );
+    }
+
+    try {
+      // Step 1: Validate token by calling /user
+      try {
+        await _dio.get('/user');
+      } on DioException catch (e) {
+        if (e.response?.statusCode == 401) {
+          return ConnectionTestResult(
+            success: false,
+            message: 'Token is invalid or expired. Reconnect GitHub.',
+            status: SyncStatus.tokenExpired,
+          );
+        }
+        if (e.response?.statusCode == 403) {
+          return ConnectionTestResult(
+            success: false,
+            message: 'Token is revoked or lacks access. Reconnect GitHub.',
+            status: SyncStatus.tokenRevoked,
+          );
+        }
+        rethrow;
+      }
+
+      // Step 2: Validate repo exists and is accessible
+      try {
+        final repoResp = await _dio.get('/repos/$repoOwner/$repoName');
+        final repo = RepositoryInfo.fromJson(repoResp.data);
+
+        return ConnectionTestResult(
+          success: true,
+          message: 'Connected to ${repo.owner}/$repoName (${repo.isPrivate ? 'private' : 'public'})',
+          status: SyncStatus.connected,
+          repo: repo,
+        );
+      } on DioException catch (e) {
+        if (e.response?.statusCode == 404) {
+          return ConnectionTestResult(
+            success: false,
+            message: 'Repository "$repoOwner/$repoName" not found. Check owner and repo name.',
+            status: SyncStatus.repoNotFound,
+          );
+        }
+        if (e.response?.statusCode == 403) {
+          return ConnectionTestResult(
+            success: false,
+            message: 'Token does not have access to this repository. Check repo permissions.',
+            status: SyncStatus.missingPermission,
+          );
+        }
+        rethrow;
+      }
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.connectionError) {
+        return ConnectionTestResult(
+          success: false,
+          message: 'Network unavailable. Check your internet connection.',
+          status: SyncStatus.networkUnavailable,
+        );
+      }
+      return ConnectionTestResult(
+        success: false,
+        message: 'Connection test failed: ${e.message}',
+        status: SyncStatus.unknown,
+      );
+    } catch (e) {
+      return ConnectionTestResult(
+        success: false,
+        message: 'Connection test failed: $e',
+        status: SyncStatus.unknown,
+      );
+    }
+  }
+
+  // ========== Sync Operations ==========
+
   Future<SyncResult> pushChanges({required Uint8List wrappingKey}) async {
     if (!isConfigured) {
       return SyncResult(
         success: false,
         message: 'GitHub not configured',
         error: 'Missing token, owner, or repo name',
+        status: SyncStatus.notConfigured,
       );
     }
 
@@ -137,10 +386,8 @@ class GitHubSyncService {
         },
       );
 
-      // Mark all pending queue items as synced
       await db.markAllPendingSyncItemsCompleted();
 
-      // Clear tombstones that were synced
       final tombstones = await db.getTombstones();
       if (tombstones.isNotEmpty) {
         await db.clearSyncedTombstones(
@@ -148,19 +395,15 @@ class GitHubSyncService {
         );
       }
 
-      return SyncResult(success: true, message: 'Push successful', recordsSync: 1);
+      return SyncResult(success: true, message: 'Push successful', recordsSync: 1, status: SyncStatus.connected);
     } on DioException catch (e) {
-      final detail = e.response?.data is Map ? (e.response!.data as Map)['message'] ?? e.message : e.message;
-      return SyncResult(
-        success: false,
-        message: 'Push failed',
-        error: 'GitHub API error ($detail). Ensure your token has repo/contents write access.',
-      );
+      return _handleDioError(e, 'Push failed');
     } catch (e) {
       return SyncResult(
         success: false,
         message: 'Push failed',
         error: 'Sync error: $e',
+        status: SyncStatus.unknown,
       );
     }
   }
@@ -171,6 +414,7 @@ class GitHubSyncService {
         success: false,
         message: 'GitHub not configured',
         error: 'Missing token, owner, or repo name',
+        status: SyncStatus.notConfigured,
       );
     }
 
@@ -193,14 +437,12 @@ class GitHubSyncService {
       int mergedCount = 0;
       int conflictCount = 0;
 
-      // Extract tombstoned IDs from cloud data
       final cloudTombstones = <String>{};
       for (final t in (decrypted['tombstones'] as List<dynamic>?) ?? []) {
         final tData = t as Map<String, dynamic>;
         cloudTombstones.add(tData['id'] as String);
       }
 
-      // Merge function with LWW + tombstone awareness
       Future<int> mergeRecords({
         required List<dynamic> cloudRecords,
         required String type,
@@ -214,9 +456,7 @@ class GitHubSyncService {
           final data = r as Map<String, dynamic>;
           final id = data['id'] as String;
 
-          // Skip if this record was tombstoned (deleted locally)
           if (cloudTombstones.contains(id)) {
-            // Also delete local copy if it exists (cloud tombstone wins for deletes)
             final local = await reader(id);
             if (local != null) {
               await deleter(id);
@@ -234,7 +474,6 @@ class GitHubSyncService {
 
             final diff = cloudTime.difference(localTime).inSeconds.abs();
             if (diff <= 2 && local['updatedAt'] != data['updatedAt']) {
-              // Near-simultaneous edits — store as conflict
               await db.storeConflict(EncryptionEnvelope(
                 recordId: id,
                 version: '1.0',
@@ -316,25 +555,76 @@ class GitHubSyncService {
         message: 'Pull successful',
         recordsSync: mergedCount,
         conflicts: conflictCount,
+        status: SyncStatus.connected,
       );
     } on DioException catch (e) {
-      final detail = e.response?.data is Map ? (e.response!.data as Map)['message'] ?? e.message : e.message;
-      return SyncResult(
-        success: false,
-        message: 'Pull failed',
-        error: 'GitHub API error ($detail). Ensure your token has repo/contents read access.',
-      );
+      if (e.response?.statusCode == 404) {
+        return SyncResult(
+          success: false,
+          message: 'No cloud backup found. Push data first.',
+          error: 'Remote file not found. Use Push to create the initial backup.',
+          status: SyncStatus.connected,
+        );
+      }
+      return _handleDioError(e, 'Pull failed');
     } catch (e) {
       return SyncResult(
         success: false,
         message: 'Pull failed',
         error: 'Sync error: $e',
+        status: SyncStatus.unknown,
       );
     }
   }
 
-  /// Extract updatedAt with fallback: try `updatedAt` field, then `createdAt`,
-  /// then use a minimum epoch sentinel so sorting still works.
+  SyncResult _handleDioError(DioException e, String action) {
+    final statusCode = e.response?.statusCode;
+    final detail = e.response?.data is Map
+        ? (e.response!.data as Map)['message'] ?? e.message
+        : e.message;
+
+    switch (statusCode) {
+      case 401:
+        return SyncResult(
+          success: false,
+          message: '$action: Token expired',
+          error: 'GitHub session expired. Reconnect GitHub.',
+          status: SyncStatus.tokenExpired,
+        );
+      case 403:
+        return SyncResult(
+          success: false,
+          message: '$action: Access denied',
+          error: 'Token lacks required permissions. Ensure repo contents read/write access.',
+          status: SyncStatus.missingPermission,
+        );
+      case 404:
+        return SyncResult(
+          success: false,
+          message: '$action: Not found',
+          error: 'Repository or file not found. Check owner/repo name.',
+          status: SyncStatus.repoNotFound,
+        );
+      default:
+        if (e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.receiveTimeout ||
+            e.type == DioExceptionType.connectionError) {
+          return SyncResult(
+            success: false,
+            message: '$action: Network error',
+            error: 'Network unavailable. Check your internet connection.',
+            status: SyncStatus.networkUnavailable,
+          );
+        }
+        return SyncResult(
+          success: false,
+          message: '$action: API error',
+          error: '$detail',
+          status: SyncStatus.unknown,
+        );
+    }
+  }
+
   DateTime _safeTimestamp(Map<String, dynamic> record) {
     final raw = record['updatedAt'] ?? record['createdAt'];
     if (raw is String && raw.isNotEmpty) {
@@ -351,9 +641,6 @@ class GitHubSyncService {
     return base64Url.encode(hash.bytes);
   }
 
-  /// Upload an account bootstrap record so the user can log in from another device.
-  /// The record contains KDF params (salt, algorithm, iterations) plus the
-  /// already-encrypted UMK backup.  No plaintext secrets are stored.
   Future<SyncResult> uploadAccountBootstrap({
     required Uint8List salt,
     required String algorithm,
@@ -363,7 +650,7 @@ class GitHubSyncService {
   }) async {
     if (!isConfigured) {
       return SyncResult(success: false, message: 'GitHub not configured',
-        error: 'Missing token, owner, or repo name');
+        error: 'Missing token, owner, or repo name', status: SyncStatus.notConfigured);
     }
     try {
       final now = DateTime.now().toUtc().toIso8601String();
@@ -397,20 +684,15 @@ class GitHubSyncService {
           if (sha != null) 'sha': sha,
         },
       );
-      return SyncResult(success: true, message: 'Bootstrap uploaded');
+      return SyncResult(success: true, message: 'Bootstrap uploaded', status: SyncStatus.connected);
     } on DioException catch (e) {
-      final detail = e.response?.data is Map
-          ? (e.response!.data as Map)['message'] ?? e.message : e.message;
-      return SyncResult(success: false, message: 'Bootstrap upload failed',
-        error: 'GitHub API error ($detail)');
+      return _handleDioError(e, 'Bootstrap upload');
     } catch (e) {
       return SyncResult(success: false, message: 'Bootstrap upload failed',
-        error: '$e');
+        error: '$e', status: SyncStatus.unknown);
     }
   }
 
-  /// Fetch the account bootstrap record for [username] from GitHub.
-  /// Returns the decoded JSON map, or null if the file does not exist.
   Future<Map<String, dynamic>?> fetchAccountBootstrap(String username) async {
     if (!isConfigured) return null;
     try {
@@ -426,7 +708,6 @@ class GitHubSyncService {
     }
   }
 
-  /// Check if a bootstrap record exists for [username].
   Future<bool> accountBootstrapExists(String username) async {
     if (!isConfigured) return false;
     try {
@@ -438,11 +719,10 @@ class GitHubSyncService {
     }
   }
 
-  /// Delete the account bootstrap record for the current [userId].
   Future<SyncResult> deleteAccountBootstrap() async {
     if (!isConfigured) {
       return SyncResult(success: false, message: 'GitHub not configured',
-        error: 'Missing token, owner, or repo name');
+        error: 'Missing token, owner, or repo name', status: SyncStatus.notConfigured);
     }
     try {
       String? sha;
@@ -457,9 +737,9 @@ class GitHubSyncService {
           data: {'message': 'Delete bootstrap for ${_usernameHash(userId)}', 'sha': sha},
         );
       }
-      return SyncResult(success: true, message: 'Bootstrap deleted');
+      return SyncResult(success: true, message: 'Bootstrap deleted', status: SyncStatus.connected);
     } catch (e) {
-      return SyncResult(success: false, message: 'Bootstrap delete failed', error: '$e');
+      return SyncResult(success: false, message: 'Bootstrap delete failed', error: '$e', status: SyncStatus.unknown);
     }
   }
 
@@ -481,6 +761,59 @@ class GitHubSyncService {
   Future<RepositoryInfo?> getRepositoryInfo() async {
     try {
       final response = await _dio.get('/repos/$repoOwner/$repoName');
+      return RepositoryInfo.fromJson(response.data);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Get the authenticated GitHub user's login name.
+  /// Returns null on failure.
+  Future<String?> getCurrentUser() async {
+    try {
+      final response = await _dio.get('/user');
+      return response.data['login'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// List private repos accessible to the authenticated token.
+  /// Returns a list of [RepositoryInfo] or empty list on failure.
+  Future<List<RepositoryInfo>> listRepos({String? type}) async {
+    try {
+      final response = await _dio.get('/user/repos', queryParameters: {
+        'per_page': 100,
+        'sort': 'updated',
+        if (type != null) 'type': type,
+      });
+      final list = response.data as List<dynamic>;
+      return list.map((r) => RepositoryInfo.fromJson(r)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Check whether a repo [owner]/[name] exists and is accessible.
+  Future<bool> repoExists(String owner, String name) async {
+    try {
+      await _dio.get('/repos/$owner/$name');
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Create a private repo with the given [name] under the authenticated user.
+  /// Returns [RepositoryInfo] on success, or null on failure.
+  Future<RepositoryInfo?> createRepo(String name) async {
+    try {
+      final response = await _dio.post('/user/repos', data: {
+        'name': name,
+        'private': true,
+        'auto_init': false,
+        'description': 'Encrypted backup for SJsaver',
+      });
       return RepositoryInfo.fromJson(response.data);
     } catch (_) {
       return null;

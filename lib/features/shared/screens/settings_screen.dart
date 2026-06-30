@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show File;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -5,11 +6,13 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:money_manager/config/app_colors.dart';
 import 'package:money_manager/providers/auth_provider.dart';
 import 'package:money_manager/providers/app_provider.dart';
 import 'package:money_manager/config/app_routes.dart';
 import 'package:money_manager/core/security/secure_storage.dart';
+import 'package:money_manager/core/services/github_sync_service.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:excel/excel.dart' as excel_pkg;
@@ -819,93 +822,892 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _showSyncConfigDialog() {
     final cs = Theme.of(context).colorScheme;
-    final tokenCtrl = TextEditingController();
+    final authProvider = context.read<AuthProvider>();
+    _showGitHubSyncDialog(context, cs, authProvider);
+  }
+
+  Future<String?> _resolveToken(String userId) async {
+    final oauth = await SecureStorageService.loadGitHubOAuthToken(userId);
+    if (oauth != null) {
+      final expiry = await SecureStorageService.loadGitHubOAuthExpiry(userId);
+      if (expiry == null || expiry.isAfter(DateTime.now())) {
+        return oauth;
+      }
+    }
+    return await SecureStorageService.loadGitHubPat(userId);
+  }
+
+  void _showGitHubSyncDialog(BuildContext outerContext, ColorScheme cs, AuthProvider authProvider) {
     final ownerCtrl = TextEditingController();
     final repoCtrl = TextEditingController();
+    final tokenCtrl = TextEditingController();
     bool tokenVisible = false;
+    bool usePat = false;
+    String statusText = 'Loading...';
+    SyncStatus currentStatus = SyncStatus.unknown;
+    DateTime? lastSyncTime;
+    bool isTesting = false;
+    bool isPushing = false;
+    bool isPulling = false;
+    bool isOAuthFlow = false;
+    String? oauthUserCode;
+    String? oauthVerificationUri;
+    Timer? oauthPollTimer;
+    bool oauthExpired = false;
 
-    _loadSyncSettings(tokenCtrl, ownerCtrl, repoCtrl);
+    Future<void> updateStatusText() async {
+      final userId = authProvider.currentUserId ?? '';
+      final settings = await SecureStorageService.loadSyncSettings();
+      final token = await _resolveToken(userId);
+      final meta = await SecureStorageService.loadSyncMetadata(userId);
+
+      if (token == null || settings == null) {
+        currentStatus = SyncStatus.notConfigured;
+        statusText = 'Not configured';
+        lastSyncTime = null;
+        return;
+      }
+
+      final savedOwner = settings['owner'] as String? ?? '';
+      final savedRepo = settings['repoName'] as String? ?? '';
+      final savedBranch = settings['branch'] as String? ?? 'main';
+      final savedGithubUser = settings['githubUsername'] as String?;
+      ownerCtrl.text = savedOwner;
+      repoCtrl.text = savedRepo;
+      lastSyncTime = meta != null ? DateTime.tryParse(meta['lastSyncTimestamp'] as String? ?? '') : null;
+
+      // Build a display label
+      final githubLabel = savedGithubUser != null ? '@$savedGithubUser' : savedOwner;
+      statusText = '$githubLabel → $savedOwner/$savedRepo ($savedBranch)';
+      currentStatus = SyncStatus.connected;
+
+      final srv = authProvider.authService;
+      if (srv == null) { currentStatus = SyncStatus.unknown; statusText = 'Service unavailable'; return; }
+
+      final syncService = GitHubSyncService(
+        githubToken: token,
+        repoOwner: savedOwner,
+        repoName: savedRepo,
+        db: srv.database,
+        userId: userId,
+        deviceId: srv.deviceId,
+      );
+
+      final result = await syncService.testConnection();
+      currentStatus = result.status;
+      if (result.success) {
+        statusText = '${savedGithubUser != null ? '@$savedGithubUser ' : ''}$savedOwner/$savedRepo ($savedBranch) • Connected';
+      } else {
+        statusText = result.message;
+      }
+    }
 
     showDialog(
-      context: context,
+      context: outerContext,
+      barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: cs.surface,
-          title: Text('GitHub Sync', style: TextStyle(color: cs.onSurface)),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+        builder: (ctx, setDialogState) {
+          // Trigger initial status load
+          if (statusText == 'Loading...') {
+            updateStatusText().then((_) => setDialogState(() {}));
+          }
+
+          return AlertDialog(
+            backgroundColor: cs.surface,
+            title: Row(
               children: [
-                Text('Configure your GitHub repo for encrypted cloud backup.', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: tokenCtrl,
-                  obscureText: !tokenVisible,
-                  style: TextStyle(color: cs.onSurface),
-                  decoration: InputDecoration(
-                    labelText: 'Personal Access Token',
-                    labelStyle: TextStyle(color: cs.onSurfaceVariant),
-                    filled: true, fillColor: cs.surfaceContainerHighest,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    suffixIcon: IconButton(
-                      icon: Icon(tokenVisible ? Icons.visibility : Icons.visibility_off, color: cs.onSurfaceVariant),
-                      onPressed: () => setDialogState(() => tokenVisible = !tokenVisible),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: ownerCtrl,
-                  style: TextStyle(color: cs.onSurface),
-                  decoration: InputDecoration(
-                    labelText: 'Repo Owner (username)',
-                    labelStyle: TextStyle(color: cs.onSurfaceVariant),
-                    filled: true, fillColor: cs.surfaceContainerHighest,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: repoCtrl,
-                  style: TextStyle(color: cs.onSurface),
-                  decoration: InputDecoration(
-                    labelText: 'Repo Name',
-                    labelStyle: TextStyle(color: cs.onSurfaceVariant),
-                    filled: true, fillColor: cs.surfaceContainerHighest,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  ),
-                ),
+                Icon(Icons.cloud_sync, color: _statusColor(currentStatus, cs), size: 22),
+                const SizedBox(width: 8),
+                Text('GitHub Sync', style: TextStyle(color: cs.onSurface, fontSize: 18)),
               ],
             ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: TextStyle(color: cs.onSurfaceVariant))),
-            TextButton(
-              onPressed: () async {
-                await SecureStorageService.saveGitHubPat(userId: 'sync', encryptedPat: tokenCtrl.text.trim());
-                await SecureStorageService.saveSyncSettings(owner: ownerCtrl.text.trim(), repoName: repoCtrl.text.trim());
-                if (ctx.mounted) {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Sync settings saved'), backgroundColor: AppColors.success),
-                  );
-                }
-              },
-              child: Text('Save', style: TextStyle(color: cs.primary)),
+            content: SingleChildScrollView(
+              child: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Status display
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: _statusColor(currentStatus, cs).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(_statusIcon(currentStatus), color: _statusColor(currentStatus, cs), size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(statusText, style: TextStyle(color: _statusColor(currentStatus, cs), fontSize: 13, fontWeight: FontWeight.w600)),
+                                if (lastSyncTime != null)
+                                  Text('Last sync: ${DateFormat('dd MMM yyyy HH:mm').format(lastSyncTime!)}', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // OAuth / PAT toggle
+                    if (!isOAuthFlow && !oauthExpired) Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () async {
+                              setDialogState(() { isOAuthFlow = true; oauthExpired = false; });
+                              await _startOAuthFlow(
+                                ctx, setDialogState, cs, authProvider,
+                                ownerCtrl.text.trim(), repoCtrl.text.trim(),
+                                (code, uri) { oauthUserCode = code; oauthVerificationUri = uri; },
+                                (expired) { oauthExpired = expired; },
+                              );
+                            },
+                            icon: Icon(Icons.login, size: 18),
+                            label: Text('Login with GitHub', style: TextStyle(fontSize: 13)),
+                            style: OutlinedButton.styleFrom(foregroundColor: cs.primary),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    if (isOAuthFlow && !oauthExpired) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: cs.primaryContainer.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          children: [
+                            Text('Authorize GitHub', style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w600, fontSize: 14)),
+                            const SizedBox(height: 8),
+                            if (oauthUserCode != null) ...[
+                              Text('Enter code:', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
+                              const SizedBox(height: 4),
+                              SelectableText(oauthUserCode!, style: TextStyle(color: cs.primary, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 4)),
+                            ],
+                            const SizedBox(height: 8),
+                            if (oauthVerificationUri != null) ...[
+                              TextButton.icon(
+                                onPressed: () async {
+                                  final uri = Uri.tryParse(oauthVerificationUri!);
+                                  if (uri != null && await canLaunchUrl(uri)) {
+                                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                  }
+                                },
+                                icon: Icon(Icons.open_in_browser, size: 16),
+                                label: Text('Open $oauthVerificationUri', style: TextStyle(fontSize: 12)),
+                              ),
+                            ],
+                            const SizedBox(height: 4),
+                            Text('Waiting for authorization...', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    if (oauthExpired) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: cs.error.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text('Device code expired. Tap "Login with GitHub" to restart.', style: TextStyle(color: cs.error, fontSize: 12)),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // Connected repo info / Change repo button
+                    if (currentStatus == SyncStatus.connected) ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                final userId = authProvider.currentUserId ?? '';
+                                final token = await _resolveToken(userId);
+                                if (token == null) return;
+                                final srv = authProvider.authService;
+                                if (srv == null) return;
+                                final result = await _showRepoPickerDialog(ctx, cs, token, authProvider, null);
+                                if (result != null) {
+                                  await SecureStorageService.saveSyncSettings(owner: result.$1, repoName: result.$2, branch: result.$3);
+                                  setDialogState(() { statusText = 'Loading...'; });
+                                }
+                              },
+                              icon: Icon(Icons.swap_horiz, size: 18),
+                              label: Text('Change Repository', style: TextStyle(fontSize: 12)),
+                              style: OutlinedButton.styleFrom(foregroundColor: cs.primary),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ] else ...[
+                      // Owner / Repo fields (manual entry fallback)
+                      TextField(
+                        controller: ownerCtrl,
+                        style: TextStyle(color: cs.onSurface, fontSize: 14),
+                        decoration: InputDecoration(
+                          labelText: 'Repo Owner (username)',
+                          labelStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                          filled: true, fillColor: cs.surfaceContainerHighest,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: repoCtrl,
+                        style: TextStyle(color: cs.onSurface, fontSize: 14),
+                        decoration: InputDecoration(
+                          labelText: 'Repo Name',
+                          labelStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                          filled: true, fillColor: cs.surfaceContainerHighest,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton.icon(
+                            onPressed: () => setDialogState(() { usePat = !usePat; }),
+                            icon: Icon(usePat ? Icons.expand_less : Icons.expand_more, size: 16),
+                            label: Text(usePat ? 'Hide PAT input' : 'Use PAT instead', style: TextStyle(fontSize: 12)),
+                            style: TextButton.styleFrom(foregroundColor: cs.onSurfaceVariant),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    if (usePat) ...[
+                      TextField(
+                        controller: tokenCtrl,
+                        obscureText: !tokenVisible,
+                        style: TextStyle(color: cs.onSurface, fontSize: 14),
+                        decoration: InputDecoration(
+                          labelText: 'Personal Access Token',
+                          labelStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                          filled: true, fillColor: cs.surfaceContainerHighest,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          suffixIcon: IconButton(
+                            icon: Icon(tokenVisible ? Icons.visibility : Icons.visibility_off, color: cs.onSurfaceVariant, size: 20),
+                            onPressed: () => setDialogState(() => tokenVisible = !tokenVisible),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text('Fine-grained PAT with Contents read/write access. Expires after 30 days.', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 10)),
+                      const SizedBox(height: 10),
+                    ],
+
+                    // Action buttons
+                    const Divider(height: 16),
+                    if (isTesting || isPushing || isPulling)
+                      const Center(child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator(strokeWidth: 2)))
+                    else ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () async {
+                                setDialogState(() { isTesting = true; });
+                                try {
+                                  final userId = authProvider.currentUserId ?? '';
+                                  final token = await _resolveToken(userId);
+                                  if (token == null) {
+                                    statusText = 'No token. Login with GitHub or enter PAT.';
+                                    currentStatus = SyncStatus.notConfigured;
+                                    setDialogState(() {});
+                                    return;
+                                  }
+                                  final srv = authProvider.authService;
+                                  if (srv == null) { setDialogState(() { isTesting = false; }); return; }
+                                  final syncService = GitHubSyncService(
+                                    githubToken: token,
+                                    repoOwner: ownerCtrl.text.trim(),
+                                    repoName: repoCtrl.text.trim(),
+                                    db: srv.database,
+                                    userId: userId,
+                                    deviceId: srv.deviceId,
+                                  );
+                                  final result = await syncService.testConnection();
+                                  statusText = result.message;
+                                  currentStatus = result.status;
+                                } catch (e) {
+                                  statusText = 'Test failed: $e';
+                                  currentStatus = SyncStatus.unknown;
+                                }
+                                setDialogState(() { isTesting = false; });
+                              },
+                              style: OutlinedButton.styleFrom(foregroundColor: cs.primary, padding: const EdgeInsets.symmetric(vertical: 10)),
+                              child: Text('Test Connection', style: TextStyle(fontSize: 12)),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextButton(
+                              onPressed: currentStatus != SyncStatus.connected ? null : () async {
+                                setDialogState(() { isPushing = true; });
+                                await _doSync(ctx, setDialogState, authProvider, ownerCtrl.text.trim(), repoCtrl.text.trim(), 'push',
+                                  (s, t) { statusText = s; currentStatus = t; });
+                                setDialogState(() { isPushing = false; });
+                              },
+                              style: TextButton.styleFrom(foregroundColor: cs.primary, padding: const EdgeInsets.symmetric(vertical: 10)),
+                              child: Text('Push', style: TextStyle(fontSize: 12)),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextButton(
+                              onPressed: currentStatus != SyncStatus.connected ? null : () async {
+                                setDialogState(() { isPulling = true; });
+                                await _doSync(ctx, setDialogState, authProvider, ownerCtrl.text.trim(), repoCtrl.text.trim(), 'pull',
+                                  (s, t) { statusText = s; currentStatus = t; });
+                                setDialogState(() { isPulling = false; });
+                              },
+                              style: TextButton.styleFrom(foregroundColor: cs.primary, padding: const EdgeInsets.symmetric(vertical: 10)),
+                              child: Text('Pull', style: TextStyle(fontSize: 12)),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextButton(
+                              onPressed: currentStatus != SyncStatus.connected ? null : () async {
+                                setDialogState(() { isPushing = true; });
+                                await _doSync(ctx, setDialogState, authProvider, ownerCtrl.text.trim(), repoCtrl.text.trim(), 'full',
+                                  (s, t) { statusText = s; currentStatus = t; });
+                                setDialogState(() { isPushing = false; });
+                              },
+                              style: TextButton.styleFrom(foregroundColor: cs.primary, padding: const EdgeInsets.symmetric(vertical: 10)),
+                              child: Text('Full Sync', style: TextStyle(fontSize: 12)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ),
-          ],
-        ),
+            actions: [
+              TextButton(
+                onPressed: () async {
+                  final userId = authProvider.currentUserId ?? '';
+                  await SecureStorageService.deleteGitHubCredentials(userId);
+                  if (ctx.mounted) {
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(outerContext).showSnackBar(
+                      const SnackBar(content: Text('GitHub credentials cleared'), backgroundColor: AppColors.success),
+                    );
+                  }
+                },
+                child: Text('Clear Credentials', style: TextStyle(color: cs.error, fontSize: 12)),
+              ),
+              TextButton(
+                onPressed: () async {
+                  // Save settings on close
+                  final userId = authProvider.currentUserId ?? '';
+                  if (ownerCtrl.text.trim().isNotEmpty && repoCtrl.text.trim().isNotEmpty) {
+                    await SecureStorageService.saveSyncSettings(owner: ownerCtrl.text.trim(), repoName: repoCtrl.text.trim());
+                  }
+                  if (tokenCtrl.text.trim().isNotEmpty && usePat) {
+                    await SecureStorageService.saveGitHubPat(userId: userId, encryptedPat: tokenCtrl.text.trim());
+                  }
+                  oauthPollTimer?.cancel();
+                  if (ctx.mounted) Navigator.pop(ctx);
+                },
+                child: Text('Close', style: TextStyle(color: cs.primary)),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Future<void> _loadSyncSettings(TextEditingController tokenCtrl, TextEditingController ownerCtrl, TextEditingController repoCtrl) async {
-    final token = await SecureStorageService.loadGitHubPat('sync');
-    final settings = await SecureStorageService.loadSyncSettings();
-    if (token != null) tokenCtrl.text = token;
-    if (settings != null) {
-      ownerCtrl.text = settings['owner'] as String? ?? '';
-      repoCtrl.text = settings['repoName'] as String? ?? '';
+  Future<void> _startOAuthFlow(
+    BuildContext ctx,
+    void Function(VoidCallback) setDialogState,
+    ColorScheme cs,
+    AuthProvider authProvider,
+    String owner,
+    String repoName,
+    void Function(String, String) setCodes,
+    void Function(bool) setExpired,
+  ) async {
+    try {
+      final srv = authProvider.authService;
+      if (srv == null) { setExpired(true); setDialogState(() {}); return; }
+
+      const oauthClientId = 'Iv23li0VnDhVh0ITNcNP'; // Replace with real OAuth App client ID
+
+      final syncService = GitHubSyncService(
+        githubToken: null,
+        repoOwner: owner,
+        repoName: repoName,
+        db: srv.database,
+        userId: authProvider.currentUserId ?? '',
+        deviceId: srv.deviceId,
+        oauthClientId: oauthClientId,
+      );
+
+      final deviceFlow = await syncService.startDeviceFlow();
+      setCodes(deviceFlow.userCode, deviceFlow.verificationUri);
+      setDialogState(() {});
+
+      final uri = Uri.tryParse(deviceFlow.verificationUri);
+      if (uri != null && await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+
+      final deadline = DateTime.now().add(Duration(seconds: deviceFlow.expiresIn));
+      int pollInterval = deviceFlow.interval;
+
+      while (DateTime.now().isBefore(deadline)) {
+        await Future.delayed(Duration(seconds: pollInterval));
+        try {
+          final tokenResponse = await syncService.pollForToken(deviceFlow.deviceCode);
+          if (tokenResponse != null) {
+            final userId = authProvider.currentUserId ?? '';
+            final token = tokenResponse.accessToken;
+            await SecureStorageService.saveGitHubOAuthToken(userId: userId, token: token);
+            if (tokenResponse.expiresIn != null) {
+              await SecureStorageService.saveGitHubOAuthExpiry(
+                userId: userId,
+                expiry: DateTime.now().add(Duration(seconds: tokenResponse.expiresIn!)),
+              );
+            }
+
+            // Get the authenticated GitHub username
+            final authedService = syncService.withOAuthToken(token);
+            final githubUser = await authedService.getCurrentUser();
+
+            if (ctx.mounted) {
+              // Show repo picker step
+              final repoResult = await _showRepoPickerDialog(
+                ctx,
+                cs,
+                token,
+                authProvider,
+                githubUser,
+              );
+
+              if (repoResult != null) {
+                await SecureStorageService.saveSyncSettings(
+                  owner: repoResult.$1,
+                  repoName: repoResult.$2,
+                  branch: repoResult.$3,
+                  githubUsername: githubUser,
+                );
+                if (ctx.mounted) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(content: Text('GitHub sync ready: ${repoResult.$1}/${repoResult.$2}'), backgroundColor: AppColors.success),
+                  );
+                }
+              } else {
+                // User cancelled repo picker — clear OAuth token so they can retry
+                await SecureStorageService.deleteGitHubCredentials(userId);
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('Sync repo not configured. You can set it up later.'), backgroundColor: AppColors.warning),
+                );
+              }
+            }
+            setDialogState(() {});
+            return;
+          }
+        } catch (e) {
+          if (e.toString().contains('expired') || e.toString().contains('denied')) {
+            setExpired(true);
+            setDialogState(() {});
+            return;
+          }
+          pollInterval = (pollInterval * 1.5).round();
+        }
+      }
+
+      setExpired(true);
+      setDialogState(() {});
+    } catch (e) {
+      if (ctx.mounted) {
+        final ctxCs = Theme.of(ctx).colorScheme;
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          SnackBar(content: Text('OAuth failed: $e'), backgroundColor: ctxCs.error),
+        );
+      }
+    }
+  }
+
+  /// Show a repo picker dialog after GitHub OAuth succeeds.
+  /// Returns (owner, repoName, branch) or null if cancelled.
+  Future<(String, String, String)?> _showRepoPickerDialog(
+    BuildContext ctx,
+    ColorScheme cs,
+    String token,
+    AuthProvider authProvider,
+    String? githubUser,
+  ) async {
+    final srv = authProvider.authService;
+    if (srv == null) return null;
+
+    final baseService = GitHubSyncService(
+      githubToken: token,
+      repoOwner: githubUser ?? '',
+      repoName: 'sjsaver-sync',
+      db: srv.database,
+      userId: authProvider.currentUserId ?? '',
+      deviceId: srv.deviceId,
+    );
+
+    // Phase 1: Check default repo sjsaver-sync
+    final defaultExists = await baseService.repoExists(githubUser ?? '', 'sjsaver-sync');
+    List<RepositoryInfo>? userRepos;
+
+    return showDialog<(String, String, String)>(
+      context: ctx,
+      barrierDismissible: false,
+      builder: (pickerCtx) => StatefulBuilder(
+        builder: (pickerCtx, setPickerState) {
+          String? selectedOption;
+          String manualOwner = githubUser ?? '';
+          String manualRepo = '';
+          String manualBranch = 'main';
+          List<RepositoryInfo> repoList = userRepos ?? [];
+          bool isLoadingRepos = false;
+          bool isCreating = false;
+          String? errorMsg;
+
+          return AlertDialog(
+            backgroundColor: cs.surface,
+            title: Row(
+              children: [
+                Icon(Icons.storage, color: cs.primary, size: 22),
+                const SizedBox(width: 8),
+                Text('Sync Repository', style: TextStyle(color: cs.onSurface, fontSize: 18)),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (githubUser != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Row(
+                          children: [
+                            Icon(Icons.person, size: 16, color: cs.onSurfaceVariant),
+                            const SizedBox(width: 6),
+                            Text('GitHub: @$githubUser', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+
+                    Text('Choose where to store encrypted sync data:', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+                    const SizedBox(height: 12),
+
+                    // Option 1: Default repo
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: selectedOption == 'default' ? cs.primary : cs.surfaceContainerHighest),
+                        borderRadius: BorderRadius.circular(12),
+                        color: selectedOption == 'default' ? cs.primaryContainer.withValues(alpha: 0.2) : Colors.transparent,
+                      ),
+                      child: RadioListTile<String>(
+                        title: Text('Create / use default', style: TextStyle(color: cs.onSurface, fontSize: 14, fontWeight: FontWeight.w600)),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('sjsaver-sync', style: TextStyle(color: cs.primary, fontSize: 13, fontWeight: FontWeight.w500)),
+                            Text('Private repo under your account', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11)),
+                          ],
+                        ),
+                        value: 'default',
+                        groupValue: selectedOption,
+                        onChanged: (v) => setPickerState(() { selectedOption = v; errorMsg = null; }),
+                        activeColor: cs.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Option 2: Existing private repo
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: selectedOption == 'existing' ? cs.primary : cs.surfaceContainerHighest),
+                        borderRadius: BorderRadius.circular(12),
+                        color: selectedOption == 'existing' ? cs.primaryContainer.withValues(alpha: 0.2) : Colors.transparent,
+                      ),
+                      child: RadioListTile<String>(
+                        title: Text('Select existing repo', style: TextStyle(color: cs.onSurface, fontSize: 14, fontWeight: FontWeight.w600)),
+                        subtitle: Text('Pick from your private repos', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11)),
+                        value: 'existing',
+                        groupValue: selectedOption,
+                        onChanged: (v) {
+                          setPickerState(() { selectedOption = v; errorMsg = null; });
+                          if (userRepos == null) {
+                            setPickerState(() { isLoadingRepos = true; });
+                            baseService.listRepos(type: 'private').then((repos) {
+                              setPickerState(() { userRepos = repos; repoList = repos; isLoadingRepos = false; });
+                            });
+                          }
+                        },
+                        activeColor: cs.primary,
+                      ),
+                    ),
+
+                    if (selectedOption == 'existing') ...[
+                      const SizedBox(height: 8),
+                      if (isLoadingRepos)
+                        const Center(child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator(strokeWidth: 2)))
+                      else if (repoList.isEmpty)
+                        Text('No private repos found', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12))
+                      else
+                        SizedBox(
+                          height: 140,
+                          child: ListView(
+                            children: repoList.map((repo) => RadioListTile<String>(
+                              title: Text('${repo.owner}/$repo.name', style: TextStyle(color: cs.onSurface, fontSize: 13)),
+                              subtitle: Text(repo.isPrivate ? 'Private' : 'Public', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11)),
+                              value: '${repo.owner}/${repo.name}',
+                              groupValue: 'existing',
+                              onChanged: (v) {
+                                final parts = v!.split('/');
+                                setPickerState(() { manualOwner = parts[0]; manualRepo = parts[1]; });
+                              },
+                              activeColor: cs.primary,
+                              dense: true,
+                            )).toList(),
+                          ),
+                        ),
+                    ],
+
+                    const SizedBox(height: 8),
+
+                    // Option 3: Manual entry
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: selectedOption == 'manual' ? cs.primary : cs.surfaceContainerHighest),
+                        borderRadius: BorderRadius.circular(12),
+                        color: selectedOption == 'manual' ? cs.primaryContainer.withValues(alpha: 0.2) : Colors.transparent,
+                      ),
+                      child: RadioListTile<String>(
+                        title: Text('Enter manually', style: TextStyle(color: cs.onSurface, fontSize: 14, fontWeight: FontWeight.w600)),
+                        subtitle: Text('Specify owner, repo, and branch', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11)),
+                        value: 'manual',
+                        groupValue: selectedOption,
+                        onChanged: (v) => setPickerState(() { selectedOption = v; errorMsg = null; }),
+                        activeColor: cs.primary,
+                      ),
+                    ),
+
+                    if (selectedOption == 'manual') ...[
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: TextEditingController(text: manualOwner),
+                        style: TextStyle(color: cs.onSurface, fontSize: 14),
+                        decoration: InputDecoration(
+                          labelText: 'Repo Owner', labelStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                          filled: true, fillColor: cs.surfaceContainerHighest,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                        onChanged: (v) => manualOwner = v.trim(),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: TextEditingController(text: manualRepo),
+                        style: TextStyle(color: cs.onSurface, fontSize: 14),
+                        decoration: InputDecoration(
+                          labelText: 'Repo Name', labelStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                          filled: true, fillColor: cs.surfaceContainerHighest,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                        onChanged: (v) => manualRepo = v.trim(),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: TextEditingController(text: manualBranch),
+                        style: TextStyle(color: cs.onSurface, fontSize: 14),
+                        decoration: InputDecoration(
+                          labelText: 'Branch', labelStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                          filled: true, fillColor: cs.surfaceContainerHighest,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                        onChanged: (v) => manualBranch = v.trim().isNotEmpty ? v.trim() : 'main',
+                      ),
+                    ],
+
+                    if (errorMsg != null) ...[
+                      const SizedBox(height: 8),
+                      Text(errorMsg!, style: TextStyle(color: cs.error, fontSize: 12)),
+                    ],
+
+                    if (isCreating) ...[
+                      const SizedBox(height: 12),
+                      const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                      const SizedBox(height: 4),
+                      Center(child: Text('Creating repository...', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12))),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(pickerCtx),
+                child: Text('Cancel', style: TextStyle(color: cs.onSurfaceVariant)),
+              ),
+              TextButton(
+                onPressed: selectedOption == null ? null : () async {
+                  if (selectedOption == 'default') {
+                    setPickerState(() { isCreating = true; errorMsg = null; });
+                    if (defaultExists) {
+                      Navigator.pop(pickerCtx, (githubUser ?? '', 'sjsaver-sync', 'main'));
+                      return;
+                    }
+                    final created = await baseService.createRepo('sjsaver-sync');
+                    if (created != null) {
+                      Navigator.pop(pickerCtx, (created.owner, created.name, 'main'));
+                    } else {
+                      setPickerState(() {
+                        errorMsg = 'Could not create sjsaver-sync. Ensure your token has repo creation permission.';
+                        isCreating = false;
+                      });
+                    }
+                    return;
+                  }
+
+                  if (selectedOption == 'manual' || selectedOption == 'existing') {
+                    if (manualOwner.isEmpty || manualRepo.isEmpty) {
+                      setPickerState(() { errorMsg = 'Owner and repo name are required.'; });
+                      return;
+                    }
+                    setPickerState(() { isCreating = true; errorMsg = null; });
+                    final exists = await baseService.repoExists(manualOwner, manualRepo);
+                    if (exists) {
+                      Navigator.pop(pickerCtx, (manualOwner, manualRepo, manualBranch));
+                    } else {
+                      setPickerState(() {
+                        errorMsg = 'Repo $manualOwner/$manualRepo not found or not accessible.';
+                        isCreating = false;
+                      });
+                    }
+                    return;
+                  }
+
+                  setPickerState(() { errorMsg = 'Please select an option.'; });
+                },
+                child: Text('Confirm', style: TextStyle(color: cs.primary, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _doSync(
+    BuildContext ctx,
+    void Function(VoidCallback) setDialogState,
+    AuthProvider authProvider,
+    String owner,
+    String repoName,
+    String mode,
+    void Function(String, SyncStatus) setStatus,
+  ) async {
+    final userId = authProvider.currentUserId ?? '';
+    final token = await _resolveToken(userId);
+    if (token == null) { setStatus('No token. Login or enter PAT.', SyncStatus.notConfigured); return; }
+
+    final srv = authProvider.authService;
+    if (srv == null) { setStatus('Service unavailable', SyncStatus.unknown); return; }
+
+    final syncService = GitHubSyncService(
+      githubToken: token,
+      repoOwner: owner,
+      repoName: repoName,
+      db: srv.database,
+      userId: userId,
+      deviceId: srv.deviceId,
+    );
+
+    SyncResult result;
+    if (mode == 'push') {
+      result = await syncService.pushChanges(wrappingKey: srv.userMasterKey);
+    } else if (mode == 'pull') {
+      result = await syncService.pullChanges(wrappingKey: srv.userMasterKey);
+    } else {
+      result = await syncService.fullSync(wrappingKey: srv.userMasterKey);
+    }
+
+    if (result.success) {
+      await SecureStorageService.saveSyncMetadata(
+        userId: userId,
+        lastSyncTimestamp: DateTime.now().toUtc().toIso8601String(),
+        syncStatus: 'success',
+      );
+    }
+
+    setStatus(result.success ? '${mode == 'full' ? 'Full sync' : '${mode} completed'}: ${result.recordsSync} records' : result.message, result.status);
+
+    if (ctx.mounted) {
+      final ctxCs = Theme.of(ctx).colorScheme;
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        SnackBar(
+          content: Text(result.error ?? (result.success ? 'Sync successful' : 'Sync failed')),
+          backgroundColor: result.success ? AppColors.success : ctxCs.error,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  Color _statusColor(SyncStatus status, ColorScheme cs) {
+    switch (status) {
+      case SyncStatus.connected: return const Color(0xFF34D399);
+      case SyncStatus.notConfigured: return cs.onSurfaceVariant;
+      case SyncStatus.tokenExpired:
+      case SyncStatus.tokenRevoked: return cs.error;
+      case SyncStatus.repoNotFound: return const Color(0xFFFBBF24);
+      case SyncStatus.missingPermission: return const Color(0xFFF97316);
+      case SyncStatus.networkUnavailable: return cs.onSurfaceVariant;
+      case SyncStatus.unknown: return cs.onSurfaceVariant;
+    }
+  }
+
+  IconData _statusIcon(SyncStatus status) {
+    switch (status) {
+      case SyncStatus.connected: return Icons.check_circle;
+      case SyncStatus.notConfigured: return Icons.cloud_off;
+      case SyncStatus.tokenExpired:
+      case SyncStatus.tokenRevoked: return Icons.error;
+      case SyncStatus.repoNotFound: return Icons.search_off;
+      case SyncStatus.missingPermission: return Icons.lock;
+      case SyncStatus.networkUnavailable: return Icons.wifi_off;
+      case SyncStatus.unknown: return Icons.help;
     }
   }
 

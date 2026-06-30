@@ -82,6 +82,78 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     }
   }
 
+  /// Generate amount suggestions for a given category.
+  /// Prefers recent/frequent amounts from past expenses (up to 5).
+  /// Falls back to sensible defaults if no history exists.
+  List<double> _amountSuggestionsForCategory(String category) {
+    const fallbacks = <String, List<double>>{
+      'Fuel': [500, 1000, 1500],
+      'Food & Dining': [150, 250, 500],
+      'Groceries': [500, 1000, 2000],
+      'Transport': [50, 100, 300],
+      'Rent': [5000, 10000, 15000],
+      'Entertainment': [200, 500, 1000],
+      'Healthcare': [300, 500, 1000],
+      'Subscriptions': [99, 199, 499],
+      'Bills & Utilities': [500, 1000, 2000],
+      'Shopping': [500, 1000, 2500],
+      'Travel': [2000, 5000, 10000],
+      'Personal Care': [200, 500, 1000],
+      'Education': [1000, 5000, 10000],
+      'Insurance': [5000, 10000, 20000],
+      'Gifts & Donations': [300, 500, 1000],
+      'Home Maintenance': [1000, 2000, 5000],
+      'Vehicle Maintenance': [1000, 3000, 5000],
+      'Miscellaneous': [100, 200, 500],
+    };
+
+    // Collect all expenses for this category
+    final catExpenses = _expenses.where((e) => e['category'] == category).toList();
+    if (catExpenses.isEmpty) {
+      return fallbacks[category] ?? [100, 200, 500];
+    }
+
+    // Count frequency per amount and track most recent dateTime
+    final freq = <double, int>{};
+    final lastSeen = <double, DateTime>{};
+    for (final e in catExpenses) {
+      final amt = (e['amount'] as num?)?.toDouble() ?? 0;
+      if (amt <= 0) continue;
+      freq[amt] = (freq[amt] ?? 0) + 1;
+      final dt = DateTime.tryParse(e['dateTime'] as String? ?? '');
+      if (dt != null) {
+        final existing = lastSeen[amt];
+        if (existing == null || dt.isAfter(existing)) {
+          lastSeen[amt] = dt;
+        }
+      }
+    }
+
+    // Sort: frequency desc, then most recent desc
+    final sorted = freq.keys.toList()..sort((a, b) {
+      final freqCmp = (freq[b] ?? 0).compareTo(freq[a] ?? 0);
+      if (freqCmp != 0) return freqCmp;
+      final da = lastSeen[a];
+      final db = lastSeen[b];
+      if (da == null && db == null) return 0;
+      if (da == null) return 1;
+      if (db == null) return -1;
+      return db.compareTo(da);
+    });
+
+    return sorted.take(5).toList();
+  }
+
+  /// Format amount for suggestion chip display.
+  /// Whole numbers show without decimals, e.g. ₹350.
+  /// Decimal amounts show with two places, e.g. ₹350.50.
+  String _formatSuggestionAmount(double amt) {
+    if (amt == amt.roundToDouble()) {
+      return '₹${amt.toInt()}';
+    }
+    return '₹${amt.toStringAsFixed(2)}';
+  }
+
   void _showAddExpenseDialog() {
     final nameCtrl = TextEditingController();
     final amountCtrl = TextEditingController();
@@ -108,12 +180,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           child: StatefulBuilder(
             builder: (ctx, setModalState) {
               final cs = Theme.of(ctx).colorScheme;
-              final recentAmounts = _expenses
-                  .where((e) => e['category'] == category)
-                  .map((e) => (e['amount'] as num?)?.toDouble() ?? 0)
-                  .toSet()
-                  .take(3)
-                  .toList();
+              final suggestions = _amountSuggestionsForCategory(category);
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -142,13 +209,13 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       border: InputBorder.none,
                     ),
                   ),
-                  if (recentAmounts.isNotEmpty)
+                  if (suggestions.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Wrap(
                         spacing: 8,
-                        children: recentAmounts.map((amt) => ActionChip(
-                          label: Text('₹${amt.toStringAsFixed(0)}', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                        children: suggestions.map((amt) => ActionChip(
+                          label: Text(_formatSuggestionAmount(amt), style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
                           backgroundColor: cs.surfaceContainerHighest,
                           onPressed: () => setModalState(() { amountCtrl.text = amt.toStringAsFixed(2); }),
                         )).toList(),
@@ -301,12 +368,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           child: StatefulBuilder(
             builder: (ctx, setModalState) {
               final cs = Theme.of(ctx).colorScheme;
-              final recentAmounts = _expenses
-                  .where((e) => e['category'] == category)
-                  .map((e) => (e['amount'] as num?)?.toDouble() ?? 0)
-                  .toSet()
-                  .take(3)
-                  .toList();
+              final suggestions = _amountSuggestionsForCategory(category);
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -335,13 +397,13 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       border: InputBorder.none,
                     ),
                   ),
-                  if (recentAmounts.isNotEmpty)
+                  if (suggestions.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Wrap(
                         spacing: 8,
-                        children: recentAmounts.map((amt) => ActionChip(
-                          label: Text('₹${amt.toStringAsFixed(0)}', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                        children: suggestions.map((amt) => ActionChip(
+                          label: Text(_formatSuggestionAmount(amt), style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
                           backgroundColor: cs.surfaceContainerHighest,
                           onPressed: () => setModalState(() { amountCtrl.text = amt.toStringAsFixed(2); }),
                         )).toList(),
