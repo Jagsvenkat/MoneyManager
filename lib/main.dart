@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'config/app_colors.dart';
@@ -9,19 +10,25 @@ import 'providers/app_provider.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
+
+  final authProvider = AuthProvider()..initialize();
+  final appRouter = createAppRouter(authProvider: authProvider);
+
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()..initialize()),
+        ChangeNotifierProvider.value(value: authProvider),
         ChangeNotifierProvider(create: (_) => AppProvider()),
       ],
-      child: const MoneyManagerApp(),
+      child: MoneyManagerApp(routerConfig: appRouter),
     ),
   );
 }
 
 class MoneyManagerApp extends StatefulWidget {
-  const MoneyManagerApp({super.key});
+  final GoRouter routerConfig;
+
+  const MoneyManagerApp({super.key, required this.routerConfig});
 
   @override
   State<MoneyManagerApp> createState() => _MoneyManagerAppState();
@@ -41,6 +48,7 @@ class _MoneyManagerAppState extends State<MoneyManagerApp> {
     return Consumer<AppProvider>(
         builder: (context, appProvider, _) {
           return MaterialApp.router(
+            routerConfig: widget.routerConfig,
             debugShowCheckedModeBanner: false,
             title: 'Money Manager',
             themeMode: appProvider.themeMode,
@@ -240,7 +248,6 @@ class _MoneyManagerAppState extends State<MoneyManagerApp> {
                 ),
               ),
             ),
-            routerConfig: appRouter,
           );
         },
     );

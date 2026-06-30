@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:hive_ce/hive.dart';
 import '../security/envelope.dart';
+import 'database_helpers.dart';
 
 /// Local database service for encrypted storage
 class LocalDatabaseService {
@@ -17,6 +18,11 @@ class LocalDatabaseService {
   static const String _syncQueue = 'sync_queue';
   static const String _conflictsBox = 'conflicts';
   static const String _settingsBox = 'app_settings';
+  static const String _tombstonesBox = 'tombstones';
+  static const String _recurringRulesBox = 'recurring_rules';
+  static const String _accountsBox = 'accounts';
+  static const String _transfersBox = 'transfers';
+  static const String _loanRepaymentsBox = 'loan_repayments';
 
   late Box<String> _expensesDb;
   late Box<String> _incomeDb;
@@ -27,10 +33,53 @@ class LocalDatabaseService {
   late Box<Map> _syncQueueDb;
   late Box<String> _conflictsDb;
   late Box<String> _appSettingsDb;
+  late Box<String> _tombstonesDb;
+  late Box<String> _recurringRulesDb;
+  late Box<String> _accountsDb;
+  late Box<String> _transfersDb;
+  late Box<String> _loanRepaymentsDb;
 
   late Uint8List _wrappingKey;
   late String _userId;
   late String _deviceId;
+
+  // Shared CRUD helpers (lazy-initialized after boxes are opened)
+  DatabaseHelpers get _expenseHelper => DatabaseHelpers(
+    box: _expensesDb, wrappingKey: _wrappingKey, deviceId: _deviceId, userId: _userId,
+    recordType: 'expense', syncQueueBox: _syncQueueDb,
+  );
+  DatabaseHelpers get _incomeHelper => DatabaseHelpers(
+    box: _incomeDb, wrappingKey: _wrappingKey, deviceId: _deviceId, userId: _userId,
+    recordType: 'income', syncQueueBox: _syncQueueDb,
+  );
+  DatabaseHelpers get _loanHelper => DatabaseHelpers(
+    box: _loansDb, wrappingKey: _wrappingKey, deviceId: _deviceId, userId: _userId,
+    recordType: 'loan', syncQueueBox: _syncQueueDb,
+  );
+  DatabaseHelpers get _investmentHelper => DatabaseHelpers(
+    box: _investmentsDb, wrappingKey: _wrappingKey, deviceId: _deviceId, userId: _userId,
+    recordType: 'investment', syncQueueBox: _syncQueueDb,
+  );
+  DatabaseHelpers get _categoryHelper => DatabaseHelpers(
+    box: _categoriesDb, wrappingKey: _wrappingKey, deviceId: _deviceId, userId: _userId,
+    recordType: 'category',
+  );
+  DatabaseHelpers get _recurringHelper => DatabaseHelpers(
+    box: _recurringRulesDb, wrappingKey: _wrappingKey, deviceId: _deviceId, userId: _userId,
+    recordType: 'recurring',
+  );
+  DatabaseHelpers get _accountHelper => DatabaseHelpers(
+    box: _accountsDb, wrappingKey: _wrappingKey, deviceId: _deviceId, userId: _userId,
+    recordType: 'account',
+  );
+  DatabaseHelpers get _transferHelper => DatabaseHelpers(
+    box: _transfersDb, wrappingKey: _wrappingKey, deviceId: _deviceId, userId: _userId,
+    recordType: 'transfer',
+  );
+  DatabaseHelpers get _loanRepaymentHelper => DatabaseHelpers(
+    box: _loanRepaymentsDb, wrappingKey: _wrappingKey, deviceId: _deviceId, userId: _userId,
+    recordType: 'loan_repayment',
+  );
 
   /// Initialize database with encryption key
   Future<void> initialize({
@@ -52,6 +101,11 @@ class LocalDatabaseService {
     _syncQueueDb = await Hive.openBox<Map>(_syncQueue);
     _conflictsDb = await Hive.openBox<String>(_conflictsBox);
     _appSettingsDb = await Hive.openBox<String>(_settingsBox);
+    _tombstonesDb = await Hive.openBox<String>(_tombstonesBox);
+    _recurringRulesDb = await Hive.openBox<String>(_recurringRulesBox);
+    _accountsDb = await Hive.openBox<String>(_accountsBox);
+    _transfersDb = await Hive.openBox<String>(_transfersBox);
+    _loanRepaymentsDb = await Hive.openBox<String>(_loanRepaymentsBox);
 
     await seedCategoriesIfEmpty();
   }
@@ -59,29 +113,12 @@ class LocalDatabaseService {
   // ==== Expense Operations ====
 
   Future<void> createExpense(Map<String, dynamic> expenseData) async {
-    final recordId = expenseData['id'] as String;
-    final envelope = await EnvelopeEncryption.encrypt(
-      recordId: recordId,
-      deviceId: _deviceId,
-      payload: expenseData,
-      wrappingKey: _wrappingKey,
-      metadata: {'type': 'expense', 'userId': _userId},
-    );
-    await _expensesDb.put(recordId, jsonEncode(envelope.toJson()));
-    await _addToSyncQueue('expense', recordId, 'create');
+    _ensureTimestamps(expenseData);
+    await _expenseHelper.create(expenseData);
   }
 
   Future<Map<String, dynamic>?> readExpense(String id) async {
-    final envelopeJson = _expensesDb.get(id);
-    if (envelopeJson == null) return null;
-
-    final envelope = EncryptionEnvelope.fromJson(
-      jsonDecode(envelopeJson) as Map<String, dynamic>,
-    );
-    return await EnvelopeEncryption.decrypt(
-      envelope: envelope,
-      wrappingKey: _wrappingKey,
-    );
+    return _expenseHelper.read(id);
   }
 
   Future<List<Map<String, dynamic>>> listExpenses({
@@ -91,151 +128,68 @@ class LocalDatabaseService {
     double? minAmount,
     double? maxAmount,
     String? searchText,
+    String? tagFilter,
+    String? metadataFilter,
+    String? accountId,
   }) async {
-    final expenses = <Map<String, dynamic>>[];
-
-    for (final envelopeJson in _expensesDb.values) {
-      final envelope = EncryptionEnvelope.fromJson(
-        jsonDecode(envelopeJson) as Map<String, dynamic>,
-      );
-
-      if (envelope.syncStatus == 'conflict') {
-        continue; // Skip conflicted records
+    final all = await _expenseHelper.list();
+    return all.where((expense) {
+      if (categoryFilter != null && expense['category'] != categoryFilter) return false;
+      if (startDate != null && DateTime.parse(expense['dateTime'] as String).isBefore(startDate)) return false;
+      if (endDate != null && DateTime.parse(expense['dateTime'] as String).isAfter(endDate)) return false;
+      if (minAmount != null && (expense['amount'] as double) < minAmount) return false;
+      if (maxAmount != null && (expense['amount'] as double) > maxAmount) return false;
+      if (searchText != null && searchText.isNotEmpty) {
+        if (!(expense['description'] as String? ?? '').toLowerCase().contains(searchText.toLowerCase())) return false;
       }
-
-      try {
-        final expense = await EnvelopeEncryption.decrypt(
-          envelope: envelope,
-          wrappingKey: _wrappingKey,
-        );
-
-        // Apply filters
-        if (categoryFilter != null && expense['category'] != categoryFilter) {
-          continue;
-        }
-        if (startDate != null &&
-            DateTime.parse(expense['dateTime'] as String).isBefore(startDate)) {
-          continue;
-        }
-        if (endDate != null &&
-            DateTime.parse(expense['dateTime'] as String).isAfter(endDate)) {
-          continue;
-        }
-        if (minAmount != null && (expense['amount'] as double) < minAmount) {
-          continue;
-        }
-        if (maxAmount != null && (expense['amount'] as double) > maxAmount) {
-          continue;
-        }
-        if (searchText != null && searchText.isNotEmpty) {
-          final desc = (expense['description'] as String? ?? '').toLowerCase();
-          if (!desc.contains(searchText.toLowerCase())) {
-            continue;
-          }
-        }
-
-        expenses.add(expense);
-      } catch (_) {
-        // Skip decryption error silently — data integrity is maintained
+      if (tagFilter != null && tagFilter.isNotEmpty && (expense['tag'] as String? ?? '') != tagFilter) return false;
+      if (metadataFilter != null && metadataFilter.isNotEmpty) {
+        if (!(expense['metadata'] as String? ?? '').toLowerCase().contains(metadataFilter.toLowerCase())) return false;
       }
-    }
-
-    return expenses;
+      if (accountId != null && accountId.isNotEmpty && expense['accountId'] != accountId) return false;
+      return true;
+    }).toList();
   }
 
   Future<void> updateExpense(String id, Map<String, dynamic> updates) async {
-    final currentData = await readExpense(id);
-    if (currentData == null) throw Exception('Expense not found');
-
-    final updatedData = {...currentData, ...updates};
-    await _expensesDb.delete(id);
-    await createExpense(updatedData);
-    await _addToSyncQueue('expense', id, 'update');
+    await _expenseHelper.update(id, updates);
   }
 
   Future<void> deleteExpense(String id) async {
-    await _expensesDb.delete(id);
-    await _addToSyncQueue('expense', id, 'delete');
+    await _addTombstone('expense', id);
+    await _expenseHelper.delete(id);
   }
 
   // ==== Income Operations ====
 
   Future<void> createIncome(Map<String, dynamic> incomeData) async {
-    final recordId = incomeData['id'] as String;
-    final envelope = await EnvelopeEncryption.encrypt(
-      recordId: recordId,
-      deviceId: _deviceId,
-      payload: incomeData,
-      wrappingKey: _wrappingKey,
-      metadata: {'type': 'income', 'userId': _userId},
-    );
-    await _incomeDb.put(recordId, jsonEncode(envelope.toJson()));
-    await _addToSyncQueue('income', recordId, 'create');
+    _ensureTimestamps(incomeData);
+    await _incomeHelper.create(incomeData);
   }
 
   Future<Map<String, dynamic>?> readIncome(String id) async {
-    final envelopeJson = _incomeDb.get(id);
-    if (envelopeJson == null) return null;
-
-    final envelope = EncryptionEnvelope.fromJson(
-      jsonDecode(envelopeJson) as Map<String, dynamic>,
-    );
-    return await EnvelopeEncryption.decrypt(
-      envelope: envelope,
-      wrappingKey: _wrappingKey,
-    );
+    return _incomeHelper.read(id);
   }
 
   Future<List<Map<String, dynamic>>> listIncome({
     DateTime? startDate,
     DateTime? endDate,
   }) async {
-    final incomes = <Map<String, dynamic>>[];
-
-    for (final envelopeJson in _incomeDb.values) {
-      final envelope = EncryptionEnvelope.fromJson(
-        jsonDecode(envelopeJson) as Map<String, dynamic>,
-      );
-
-      if (envelope.syncStatus == 'conflict') continue;
-
-      try {
-        final income = await EnvelopeEncryption.decrypt(
-          envelope: envelope,
-          wrappingKey: _wrappingKey,
-        );
-
-        if (startDate != null &&
-            DateTime.parse(income['dateTime'] as String).isBefore(startDate)) {
-          continue;
-        }
-        if (endDate != null &&
-            DateTime.parse(income['dateTime'] as String).isAfter(endDate)) {
-          continue;
-        }
-
-        incomes.add(income);
-      } catch (_) {
-        // Skip silently
-      }
-    }
-
-    return incomes;
+    final all = await _incomeHelper.list();
+    return all.where((income) {
+      if (startDate != null && DateTime.parse(income['dateTime'] as String).isBefore(startDate)) return false;
+      if (endDate != null && DateTime.parse(income['dateTime'] as String).isAfter(endDate)) return false;
+      return true;
+    }).toList();
   }
 
   Future<void> updateIncome(String id, Map<String, dynamic> updates) async {
-    final currentData = await readIncome(id);
-    if (currentData == null) throw Exception('Income not found');
-
-    final updatedData = {...currentData, ...updates};
-    await _incomeDb.delete(id);
-    await createIncome(updatedData);
-    await _addToSyncQueue('income', id, 'update');
+    await _incomeHelper.update(id, updates);
   }
 
   Future<void> deleteIncome(String id) async {
-    await _incomeDb.delete(id);
-    await _addToSyncQueue('income', id, 'delete');
+    await _addTombstone('income', id);
+    await _incomeHelper.delete(id);
   }
 
   // ==== Balance Operations ====
@@ -290,213 +244,357 @@ class LocalDatabaseService {
   // ==== Loan Operations ====
 
   Future<void> createLoan(Map<String, dynamic> loanData) async {
-    final recordId = loanData['id'] as String;
-    final envelope = await EnvelopeEncryption.encrypt(
-      recordId: recordId,
-      deviceId: _deviceId,
-      payload: loanData,
-      wrappingKey: _wrappingKey,
-      metadata: {'type': 'loan', 'userId': _userId},
-    );
-    await _loansDb.put(recordId, jsonEncode(envelope.toJson()));
-    await _addToSyncQueue('loan', recordId, 'create');
+    _ensureTimestamps(loanData);
+    await _loanHelper.create(loanData);
   }
 
   Future<Map<String, dynamic>?> readLoan(String id) async {
-    final envelopeJson = _loansDb.get(id);
-    if (envelopeJson == null) return null;
-
-    final envelope = EncryptionEnvelope.fromJson(
-      jsonDecode(envelopeJson) as Map<String, dynamic>,
-    );
-    return await EnvelopeEncryption.decrypt(
-      envelope: envelope,
-      wrappingKey: _wrappingKey,
-    );
+    return _loanHelper.read(id);
   }
 
   Future<List<Map<String, dynamic>>> listLoans() async {
-    final loans = <Map<String, dynamic>>[];
-
-    for (final envelopeJson in _loansDb.values) {
-      final envelope = EncryptionEnvelope.fromJson(
-        jsonDecode(envelopeJson) as Map<String, dynamic>,
-      );
-
-      try {
-        final loan = await EnvelopeEncryption.decrypt(
-          envelope: envelope,
-          wrappingKey: _wrappingKey,
-        );
-        loans.add(loan);
-      } catch (_) {
-        // Skip silently
-      }
-    }
-
-    return loans;
+    return _loanHelper.list();
   }
 
   Future<void> updateLoan(String id, Map<String, dynamic> updates) async {
-    final currentData = await readLoan(id);
-    if (currentData == null) throw Exception('Loan not found');
-
-    final updatedData = {...currentData, ...updates};
-    await _loansDb.delete(id);
-    await createLoan(updatedData);
-    await _addToSyncQueue('loan', id, 'update');
+    await _loanHelper.update(id, updates);
   }
 
   Future<void> deleteLoan(String id) async {
-    await _loansDb.delete(id);
-    await _addToSyncQueue('loan', id, 'delete');
+    await _addTombstone('loan', id);
+    await _loanHelper.delete(id);
   }
 
   // ==== Investment Operations ====
 
   Future<void> createInvestment(Map<String, dynamic> investmentData) async {
-    final recordId = investmentData['id'] as String;
-    final envelope = await EnvelopeEncryption.encrypt(
-      recordId: recordId,
-      deviceId: _deviceId,
-      payload: investmentData,
-      wrappingKey: _wrappingKey,
-      metadata: {'type': 'investment', 'userId': _userId},
-    );
-    await _investmentsDb.put(recordId, jsonEncode(envelope.toJson()));
-    await _addToSyncQueue('investment', recordId, 'create');
+    _ensureTimestamps(investmentData);
+    await _investmentHelper.create(investmentData);
   }
 
   Future<Map<String, dynamic>?> readInvestment(String id) async {
-    final envelopeJson = _investmentsDb.get(id);
-    if (envelopeJson == null) return null;
-
-    final envelope = EncryptionEnvelope.fromJson(
-      jsonDecode(envelopeJson) as Map<String, dynamic>,
-    );
-    return await EnvelopeEncryption.decrypt(
-      envelope: envelope,
-      wrappingKey: _wrappingKey,
-    );
+    return _investmentHelper.read(id);
   }
 
   Future<List<Map<String, dynamic>>> listInvestments() async {
-    final investments = <Map<String, dynamic>>[];
-
-    for (final envelopeJson in _investmentsDb.values) {
-      final envelope = EncryptionEnvelope.fromJson(
-        jsonDecode(envelopeJson) as Map<String, dynamic>,
-      );
-
-      try {
-        final investment = await EnvelopeEncryption.decrypt(
-          envelope: envelope,
-          wrappingKey: _wrappingKey,
-        );
-        investments.add(investment);
-      } catch (_) {
-        // Skip silently
-      }
-    }
-
-    return investments;
+    return _investmentHelper.list();
   }
 
   Future<void> updateInvestment(String id, Map<String, dynamic> updates) async {
-    final currentData = await readInvestment(id);
-    if (currentData == null) throw Exception('Investment not found');
-
-    final updatedData = {...currentData, ...updates};
-    await _investmentsDb.delete(id);
-    await createInvestment(updatedData);
-    await _addToSyncQueue('investment', id, 'update');
+    await _investmentHelper.update(id, updates);
   }
 
   Future<void> deleteInvestment(String id) async {
-    await _investmentsDb.delete(id);
-    await _addToSyncQueue('investment', id, 'delete');
+    await _addTombstone('investment', id);
+    await _investmentHelper.delete(id);
+  }
+
+  // ==== Recurring Rule Operations ====
+
+  Future<void> createRecurringRule(Map<String, dynamic> ruleData) async {
+    _ensureTimestamps(ruleData);
+    await _recurringHelper.create(ruleData);
+  }
+
+  Future<Map<String, dynamic>?> readRecurringRule(String id) async {
+    return _recurringHelper.read(id);
+  }
+
+  Future<List<Map<String, dynamic>>> listRecurringRules({String? type}) async {
+    final all = await _recurringHelper.list();
+    if (type == null) return all;
+    return all.where((r) => r['type'] == type).toList();
+  }
+
+  Future<void> updateRecurringRule(String id, Map<String, dynamic> updates) async {
+    await _recurringHelper.update(id, updates);
+  }
+
+  Future<void> deleteRecurringRule(String id) async {
+    await _recurringHelper.delete(id);
+  }
+
+  /// Find active recurring rules whose nextDueDate is on or before today
+  Future<List<Map<String, dynamic>>> getDueRecurringRules() async {
+    final now = DateTime.now();
+    final rules = await listRecurringRules(type: null);
+    return rules.where((r) {
+      if (r['status'] != 'active') return false;
+      final nextDue = DateTime.tryParse(r['nextDueDate'] as String? ?? '');
+      if (nextDue == null || nextDue.isAfter(now)) return false;
+      final endDate = r['endDate'] as String?;
+      if (endDate != null && endDate.isNotEmpty) {
+        if (DateTime.tryParse(endDate)?.isBefore(now) == true) return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  /// Advance nextDueDate by the rule's frequency interval
+  DateTime _advanceDate(DateTime from, String frequency, int interval) {
+    switch (frequency) {
+      case 'daily': return from.add(Duration(days: interval));
+      case 'weekly': return from.add(Duration(days: 7 * interval));
+      case 'monthly': return DateTime(from.year, from.month + interval, from.day);
+      case 'yearly': return DateTime(from.year + interval, from.month, from.day);
+      case 'custom': return from.add(Duration(days: interval));
+      default: return from.add(Duration(days: 30));
+    }
+  }
+
+  /// Process all due recurring rules and create corresponding records.
+  /// Returns count of generated records.
+  Future<int> processDueRecurringRules() async {
+    final dueRules = await getDueRecurringRules();
+    int created = 0;
+    for (final rule in dueRules) {
+      try {
+        final ruleId = rule['id'] as String;
+        final nextDue = DateTime.parse(rule['nextDueDate'] as String);
+        final now = DateTime.now();
+
+        // Create actual record
+        final recordId = '${ruleId}_${nextDue.millisecondsSinceEpoch}';
+        final recordData = <String, dynamic>{
+          'id': recordId,
+          'amount': rule['amount'],
+          'category': rule['category'],
+          'dateTime': nextDue.toIso8601String(),
+          '_recurringRuleId': ruleId,
+          'metadata': rule['metadata'] ?? '',
+        };
+
+        if (rule['type'] == 'expense') {
+          recordData['description'] = rule['description'] ?? 'Recurring';
+          await createExpense(recordData);
+        } else {
+          recordData['source'] = rule['description'] ?? 'Recurring Income';
+          recordData['frequency'] = 'recurring';
+          await createIncome(recordData);
+        }
+
+        // Advance nextDueDate
+        final frequency = rule['frequency'] as String? ?? 'monthly';
+        final interval = (rule['interval'] as num?)?.toInt() ?? 1;
+        final advanced = _advanceDate(nextDue, frequency, interval);
+        await updateRecurringRule(ruleId, {
+          'nextDueDate': advanced.toIso8601String(),
+          'lastCreatedAt': now.toIso8601String(),
+        });
+        created++;
+      } catch (_) {}
+    }
+    return created;
+  }
+
+  /// Get upcoming recurring items (next N due dates without creating records)
+  Future<List<Map<String, dynamic>>> getUpcomingRecurring({int count = 5}) async {
+    final rules = await listRecurringRules();
+    final active = rules.where((r) => r['status'] == 'active').toList();
+    final upcoming = <Map<String, dynamic>>[];
+    for (final rule in active) {
+      final nextDueStr = rule['nextDueDate'] as String?;
+      final endDateStr = rule['endDate'] as String?;
+      if (nextDueStr == null || nextDueStr.isEmpty) continue;
+      var cursor = DateTime.parse(nextDueStr);
+      final end = endDateStr != null && endDateStr.isNotEmpty ? DateTime.tryParse(endDateStr) : null;
+      if (end != null && cursor.isAfter(end)) continue;
+
+      final frequency = rule['frequency'] as String? ?? 'monthly';
+      final interval = (rule['interval'] as num?)?.toInt() ?? 1;
+
+      // Generate upcoming dates (up to count per rule)
+      for (int i = 0; i < count; i++) {
+        if (end != null && cursor.isAfter(end)) break;
+        if (cursor.isBefore(DateTime.now()) && i == 0) {
+          // If the current nextDueDate is in the past, advance one period
+          cursor = _advanceDate(cursor, frequency, interval);
+          if (end != null && cursor.isAfter(end)) break;
+        }
+        upcoming.add({
+          'ruleId': rule['id'],
+          'type': rule['type'],
+          'amount': rule['amount'],
+          'category': rule['category'],
+          'description': rule['description'],
+          'nextDueDate': cursor.toIso8601String(),
+          'frequency': frequency,
+        });
+        cursor = _advanceDate(cursor, frequency, interval);
+        if (end != null && cursor.isAfter(end)) break;
+      }
+    }
+    // Sort by nextDueDate
+    upcoming.sort((a, b) {
+      final da = DateTime.parse(a['nextDueDate'] as String);
+      final db = DateTime.parse(b['nextDueDate'] as String);
+      return da.compareTo(db);
+    });
+    return upcoming.take(count).toList();
+  }
+
+  // ==== Account Operations ====
+
+  Future<void> createAccount(Map<String, dynamic> accountData) async {
+    _ensureTimestamps(accountData);
+    await _accountHelper.create(accountData);
+  }
+
+  Future<Map<String, dynamic>?> readAccount(String id) async {
+    return _accountHelper.read(id);
+  }
+
+  Future<List<Map<String, dynamic>>> listAccounts() async {
+    return _accountHelper.list();
+  }
+
+  Future<void> updateAccount(String id, Map<String, dynamic> updates) async {
+    await _accountHelper.update(id, updates);
+  }
+
+  Future<void> deleteAccount(String id) async {
+    await _accountHelper.delete(id);
+  }
+
+  // ==== Transfer Operations ====
+
+  Future<void> createTransfer(Map<String, dynamic> transferData) async {
+    _ensureTimestamps(transferData);
+    await _transferHelper.create(transferData);
+
+    // Update balances
+    final fromAccount = await readAccount(transferData['fromAccountId'] as String);
+    final toAccount = await readAccount(transferData['toAccountId'] as String);
+    if (fromAccount != null) {
+      final fromBal = (fromAccount['balance'] as num?)?.toDouble() ?? 0;
+      final amt = (transferData['amount'] as num).toDouble();
+      await updateAccount(transferData['fromAccountId'] as String, {
+        'balance': fromBal - amt,
+      });
+    }
+    if (toAccount != null) {
+      final toBal = (toAccount['balance'] as num?)?.toDouble() ?? 0;
+      final amt = (transferData['amount'] as num).toDouble();
+      await updateAccount(transferData['toAccountId'] as String, {
+        'balance': toBal + amt,
+      });
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> listTransfers() async {
+    return _transferHelper.list();
+  }
+
+  // ==== Category Budget Operations ====
+
+  Future<void> setCategoryBudget(String category, double amount) async {
+    final envelope = await EnvelopeEncryption.encrypt(
+      recordId: 'cat_budget_$category',
+      deviceId: _deviceId,
+      payload: {'category': category, 'amount': amount, 'month': '${DateTime.now().year}_${DateTime.now().month}'},
+      wrappingKey: _wrappingKey,
+      metadata: {'type': 'category_budget', 'userId': _userId},
+    );
+    await _appSettingsDb.put('cat_budget_$category', jsonEncode(envelope.toJson()));
+  }
+
+  Future<double> getCategoryBudget(String category) async {
+    final val = _appSettingsDb.get('cat_budget_$category');
+    if (val == null) return 0;
+    try {
+      final envelope = EncryptionEnvelope.fromJson(jsonDecode(val) as Map<String, dynamic>);
+      final data = await EnvelopeEncryption.decrypt(envelope: envelope, wrappingKey: _wrappingKey);
+      return (data['amount'] as num?)?.toDouble() ?? 0;
+    } catch (_) { return 0; }
+  }
+
+  Future<Map<String, double>> getAllCategoryBudgets() async {
+    final result = <String, double>{};
+    for (final key in _appSettingsDb.keys) {
+      if (!key.startsWith('cat_budget_')) continue;
+      try {
+        final envelope = EncryptionEnvelope.fromJson(
+          jsonDecode(_appSettingsDb.get(key)!) as Map<String, dynamic>,
+        );
+        final data = await EnvelopeEncryption.decrypt(envelope: envelope, wrappingKey: _wrappingKey);
+        final cat = data['category'] as String?;
+        final amt = (data['amount'] as num?)?.toDouble() ?? 0;
+        if (cat != null && cat.isNotEmpty) result[cat] = amt;
+      } catch (_) {}
+    }
+    return result;
+  }
+
+  // ==== Loan Repayment Operations ====
+
+  Future<void> addLoanRepayment(Map<String, dynamic> repaymentData) async {
+    _ensureTimestamps(repaymentData);
+    await _loanRepaymentHelper.create(repaymentData);
+
+    // Update loan outstanding balance
+    final loanId = repaymentData['loanId'] as String;
+    final loan = await readLoan(loanId);
+    if (loan != null) {
+      final outstanding = (loan['outstandingBalance'] as num?)?.toDouble() ?? (loan['amount'] as num?)?.toDouble() ?? 0;
+      final paid = (repaymentData['amount'] as num).toDouble();
+      final repayments = (loan['repaymentHistory'] as List<dynamic>?) ?? [];
+      repayments.add(repaymentData);
+      await updateLoan(loanId, {
+        'outstandingBalance': outstanding - paid,
+        'repaymentHistory': repayments,
+      });
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getLoanRepayments(String loanId) async {
+    final all = await _loanRepaymentHelper.list();
+    final repayments = all.where((r) => r['loanId'] == loanId).toList();
+    repayments.sort((a, b) {
+      final da = DateTime.tryParse(a['dateTime'] as String? ?? '');
+      final db = DateTime.tryParse(b['dateTime'] as String? ?? '');
+      if (da == null && db == null) return 0;
+      if (da == null) return 1;
+      if (db == null) return -1;
+      return db.compareTo(da);
+    });
+    return repayments;
   }
 
   // ==== Category Operations ====
 
   Future<void> createCategory(Map<String, dynamic> categoryData) async {
-    final recordId = categoryData['id'] as String;
-    final envelope = await EnvelopeEncryption.encrypt(
-      recordId: recordId,
-      deviceId: _deviceId,
-      payload: categoryData,
-      wrappingKey: _wrappingKey,
-      metadata: {'type': 'category', 'userId': _userId},
-    );
-    await _categoriesDb.put(recordId, jsonEncode(envelope.toJson()));
-  }
-
-  Future<void> updateCategory(String id, Map<String, dynamic> updates) async {
-    final currentData = await readCategory(id);
-    if (currentData == null) throw Exception('Category not found');
-    final updatedData = {...currentData, ...updates, 'id': id};
-    await _categoriesDb.delete(id);
-    await createCategory(updatedData);
-  }
-
-  Future<void> deleteCategory(String id) async {
-    await _categoriesDb.delete(id);
+    _ensureTimestamps(categoryData);
+    await _categoryHelper.create(categoryData);
   }
 
   Future<Map<String, dynamic>?> readCategory(String id) async {
-    final envelopeJson = _categoriesDb.get(id);
-    if (envelopeJson == null) return null;
-    final envelope = EncryptionEnvelope.fromJson(
-      jsonDecode(envelopeJson) as Map<String, dynamic>,
-    );
-    return await EnvelopeEncryption.decrypt(
-      envelope: envelope,
-      wrappingKey: _wrappingKey,
-    );
+    return _categoryHelper.read(id);
   }
 
   Future<List<Map<String, dynamic>>> listCategories({String? type}) async {
-    final categories = <Map<String, dynamic>>[];
+    final all = await _categoryHelper.list();
+    if (type == null) return all;
+    return all.where((c) => c['type'] == type).toList();
+  }
 
-    for (final envelopeJson in _categoriesDb.values) {
-      final envelope = EncryptionEnvelope.fromJson(
-        jsonDecode(envelopeJson) as Map<String, dynamic>,
-      );
+  Future<void> updateCategory(String id, Map<String, dynamic> updates) async {
+    await _categoryHelper.update(id, updates);
+  }
 
-      try {
-        final category = await EnvelopeEncryption.decrypt(
-          envelope: envelope,
-          wrappingKey: _wrappingKey,
-        );
-        if (type == null || category['type'] == type) {
-          categories.add(category);
-        }
-      } catch (_) {
-        // Skip silently
-      }
+  Future<void> deleteCategory(String id) async {
+    await _categoryHelper.delete(id);
+  }
+
+  Map<String, dynamic> _ensureTimestamps(Map<String, dynamic> data) {
+    final now = DateTime.now().toUtc().toIso8601String();
+    if (data['createdAt'] == null || (data['createdAt'] as String).isEmpty) {
+      data['createdAt'] = now;
     }
-
-    return categories;
+    data['updatedAt'] = now;
+    return data;
   }
 
-  // ==== Sync Queue Operations ====
-
-  Future<void> _addToSyncQueue(
-    String recordType,
-    String recordId,
-    String operation,
-  ) async {
-    final queueId =
-        '$recordType:$recordId:${DateTime.now().millisecondsSinceEpoch}';
-    await _syncQueueDb.put(queueId, {
-      'recordType': recordType,
-      'recordId': recordId,
-      'operation': operation,
-      'timestamp': DateTime.now().toIso8601String(),
-      'status': 'pending',
-    });
-  }
-
+  /// Get pending sync items
   Future<List<Map<dynamic, dynamic>>> getPendingSyncItems() async {
     return _syncQueueDb.values
         .where((item) => item['status'] == 'pending')
@@ -510,6 +608,105 @@ class LocalDatabaseService {
       item['status'] = 'synced';
       await _syncQueueDb.put(queueId, item);
     }
+  }
+
+  Future<void> markAllPendingSyncItemsCompleted() async {
+    final keys = _syncQueueDb.keys.toList();
+    for (final key in keys) {
+      final item = _syncQueueDb.get(key);
+      if (item != null && item['status'] == 'pending') {
+        item['status'] = 'synced';
+        await _syncQueueDb.put(key, item);
+      }
+    }
+  }
+
+  Future<int> getPendingSyncCount() async {
+    return _syncQueueDb.values
+        .where((item) => item['status'] == 'pending')
+        .length;
+  }
+
+  // ==== Tombstone Operations ====
+
+  Future<void> _addTombstone(String recordType, String recordId) async {
+    await _tombstonesDb.put(recordId, jsonEncode({
+      'id': recordId,
+      'recordType': recordType,
+      'deletedAt': DateTime.now().toUtc().toIso8601String(),
+    }));
+  }
+
+  Future<List<Map<String, dynamic>>> getTombstones() async {
+    return _tombstonesDb.values
+        .map((v) => jsonDecode(v) as Map<String, dynamic>)
+        .toList();
+  }
+
+  Future<Set<String>> getTombstonedIds() async {
+    return _tombstonesDb.keys.cast<String>().toSet();
+  }
+
+  Future<void> removeTombstone(String recordId) async {
+    await _tombstonesDb.delete(recordId);
+  }
+
+  Future<void> clearSyncedTombstones(Set<String> syncedIds) async {
+    for (final id in syncedIds) {
+      await _tombstonesDb.delete(id);
+    }
+  }
+
+  // ==== Conflict Operations ====
+
+  Future<List<Map<String, dynamic>>> getConflicts() async {
+    final conflicts = <Map<String, dynamic>>[];
+    for (final key in _conflictsDb.keys) {
+      try {
+        final envelope = EncryptionEnvelope.fromJson(
+          jsonDecode(_conflictsDb.get(key)!) as Map<String, dynamic>,
+        );
+        final data = await EnvelopeEncryption.decrypt(
+          envelope: envelope,
+          wrappingKey: _wrappingKey,
+        );
+        conflicts.add(data);
+      } catch (_) {}
+    }
+    return conflicts;
+  }
+
+  Future<int> getConflictCount() async {
+    return _conflictsDb.length;
+  }
+
+  /// Resolve a conflict by choosing which version to keep.
+  Future<void> resolveConflict(String conflictId, String choice) async {
+    final conflictJson = _conflictsDb.get(conflictId);
+    if (conflictJson == null) return;
+    try {
+      final envelope = EncryptionEnvelope.fromJson(
+        jsonDecode(conflictJson) as Map<String, dynamic>,
+      );
+      if (choice == 'cloud') {
+        final data = await EnvelopeEncryption.decrypt(
+          envelope: envelope,
+          wrappingKey: _wrappingKey,
+        );
+        final recordType = data['_recordType'] as String? ?? 'expense';
+        switch (recordType) {
+          case 'expense': await createExpense(data); break;
+          case 'income': await createIncome(data); break;
+          case 'loan': await createLoan(data); break;
+          case 'investment': await createInvestment(data); break;
+        }
+      }
+      await _conflictsDb.delete(conflictId);
+    } catch (_) {}
+  }
+
+  Future<void> storeConflict(EncryptionEnvelope envelope) async {
+    await _conflictsDb.put(envelope.recordId, jsonEncode(envelope.toJson()));
   }
 
   // ==== Seed Default Categories ====
@@ -627,6 +824,11 @@ class LocalDatabaseService {
     await _syncQueueDb.clear();
     await _conflictsDb.clear();
     await _appSettingsDb.clear();
+    await _tombstonesDb.clear();
+    await _recurringRulesDb.clear();
+    await _accountsDb.clear();
+    await _transfersDb.clear();
+    await _loanRepaymentsDb.clear();
   }
 
   Future<void> close() async {
@@ -639,5 +841,10 @@ class LocalDatabaseService {
     await _syncQueueDb.close();
     await _conflictsDb.close();
     await _appSettingsDb.close();
+    await _tombstonesDb.close();
+    await _recurringRulesDb.close();
+    await _accountsDb.close();
+    await _transfersDb.close();
+    await _loanRepaymentsDb.close();
   }
 }

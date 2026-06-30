@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 import 'package:money_manager/config/app_colors.dart';
+import 'package:money_manager/config/app_routes.dart';
 import 'package:money_manager/features/shared/widgets/category_dependent_fields.dart';
 import 'package:money_manager/providers/auth_provider.dart';
 
@@ -94,6 +96,35 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: GestureDetector(
+                    onTap: () => context.push('${AppRoutes.recurring}'),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: cs.primaryContainer.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.repeat, color: cs.primary, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Recurring Transactions', style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.bold, fontSize: 14)),
+                                Text('Manage automated rules', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                          Icon(Icons.chevron_right, color: cs.onSurfaceVariant, size: 20),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                   child: SizedBox(
@@ -512,8 +543,13 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
         itemCount: _loans.length,
         itemBuilder: (context, index) {
           final loan = _loans[index];
-          final isToReceive = loan['loanType'] == 'To Receive';
+          final direction = loan['direction'] as String? ?? (loan['loanType'] == 'To Pay' ? 'borrowed' : 'lent');
+          final personName = loan['lenderBorrower'] as String? ?? loan['personName'] as String? ?? 'Unknown';
+          final amount = (loan['principal'] as num?)?.toDouble() ?? (loan['amount'] as num?)?.toDouble() ?? 0;
+          final outstanding = (loan['outstandingBalance'] as num?)?.toDouble() ?? amount;
+          final loanStatus = loan['status'] as String? ?? 'active';
           final dt = DateTime.tryParse(loan['dateTime'] as String? ?? '');
+          final isLent = direction == 'lent';
           return Container(
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(16),
@@ -531,27 +567,49 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                       color: AppColors.warning.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(isToReceive ? Icons.arrow_downward : Icons.arrow_upward, color: AppColors.warning, size: 20),
+                    child: Icon(isLent ? Icons.arrow_upward : Icons.arrow_downward, color: AppColors.warning, size: 20),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(loan['personName'] ?? 'Unknown', style: TextStyle(color: cs.onSurface, fontSize: 15)),
+                        Text(personName, style: TextStyle(color: cs.onSurface, fontSize: 15)),
+                        const SizedBox(height: 4),
                         Row(
                           children: [
-                            Text(isToReceive ? 'To Receive' : 'To Pay', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                            Text(isLent ? 'Lent' : 'Borrowed', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
                             if (dt != null) ...[
                               const SizedBox(width: 6),
                               Text(DateFormat('dd/MM').format(dt), style: const TextStyle(color: AppColors.textTertiary, fontSize: 10)),
                             ],
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: loanStatus == 'active' ? AppColors.success.withValues(alpha: 0.2) : loanStatus == 'closed' ? AppColors.info.withValues(alpha: 0.2) : cs.error.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                loanStatus[0].toUpperCase() + loanStatus.substring(1),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: loanStatus == 'active' ? AppColors.success : loanStatus == 'closed' ? AppColors.info : cs.error,
+                                ),
+                              ),
+                            ),
                           ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Outstanding: ₹${outstanding.toStringAsFixed(2)}',
+                          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
                         ),
                       ],
                     ),
                   ),
-                  Text('₹${loan['amount']?.toStringAsFixed(2) ?? '0.00'}', style: const TextStyle(color: AppColors.warning, fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text('₹${amount.toStringAsFixed(2)}', style: const TextStyle(color: AppColors.warning, fontSize: 16, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -565,11 +623,16 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
   void _showEditLoanDialog(Map<String, dynamic> loan) => _showLoanDialog(loan: loan);
 
   void _showLoanDialog({Map<String, dynamic>? loan}) {
-    final personCtrl = TextEditingController(text: loan?['personName'] as String? ?? '');
-    final amountCtrl = TextEditingController(text: loan?['amount']?.toString() ?? '');
+    final personCtrl = TextEditingController(text: loan?['lenderBorrower'] as String? ?? loan?['personName'] as String? ?? '');
+    final amountCtrl = TextEditingController(text: loan?['principal']?.toString() ?? loan?['amount']?.toString() ?? '');
+    final interestCtrl = TextEditingController(text: loan?['interestRate']?.toString() ?? '');
+    final emiCtrl = TextEditingController(text: loan?['emiAmount']?.toString() ?? '');
+    final outstandingCtrl = TextEditingController(text: (loan?['outstandingBalance'] as num?)?.toString() ?? '');
     DateTime selectedDate = DateTime.tryParse(loan?['dateTime'] as String? ?? '') ?? DateTime.now();
-    String loanType = loan?['loanType'] as String? ?? 'To Receive';
+    DateTime selectedDueDate = DateTime.tryParse(loan?['dueDate'] as String? ?? '') ?? DateTime.now().add(const Duration(days: 30));
+    String direction = loan?['direction'] as String? ?? (loan?['loanType'] == 'To Pay' ? 'borrowed' : 'lent');
     String loanCategory = loan?['category'] as String? ?? '';
+    String loanStatus = loan?['status'] as String? ?? 'active';
     Map<String, dynamic> metadata = decodeMetadata(loan?['metadata'] as String?);
     final isEdit = loan != null;
 
@@ -589,7 +652,8 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: StatefulBuilder(
-          builder: (ctx, setModalState) => Column(
+          builder: (ctx, setModalState) => SingleChildScrollView(
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -598,26 +662,42 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
               Text(isEdit ? 'Edit Loan' : 'Add Loan', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: cs.onSurface)),
               const SizedBox(height: 20),
               Row(
-                children: ['To Receive', 'To Pay'].map((type) {
-                  final selected = loanType == type;
-                  return Expanded(
+                children: [
+                  Expanded(
                     child: GestureDetector(
-                      onTap: () => setModalState(() => loanType = type),
+                      onTap: () => setModalState(() => direction = 'lent'),
                       child: Container(
                         margin: const EdgeInsets.symmetric(horizontal: 4),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         decoration: BoxDecoration(
-                          color: selected ? AppColors.warning.withValues(alpha: 0.2) : Colors.transparent,
+                          color: direction == 'lent' ? AppColors.warning.withValues(alpha: 0.2) : Colors.transparent,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: selected ? AppColors.warning : cs.surfaceContainerHighest),
+                          border: Border.all(color: direction == 'lent' ? AppColors.warning : cs.surfaceContainerHighest),
                         ),
                         child: Center(
-                          child: Text(type, style: TextStyle(color: selected ? AppColors.warning : cs.onSurfaceVariant, fontWeight: selected ? FontWeight.bold : FontWeight.normal)),
+                          child: Text('I Lent', style: TextStyle(color: direction == 'lent' ? AppColors.warning : cs.onSurfaceVariant, fontWeight: direction == 'lent' ? FontWeight.bold : FontWeight.normal)),
                         ),
                       ),
                     ),
-                  );
-                }).toList(),
+                  ),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setModalState(() => direction = 'borrowed'),
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: direction == 'borrowed' ? AppColors.warning.withValues(alpha: 0.2) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: direction == 'borrowed' ? AppColors.warning : cs.surfaceContainerHighest),
+                        ),
+                        child: Center(
+                          child: Text('I Borrowed', style: TextStyle(color: direction == 'borrowed' ? AppColors.warning : cs.onSurfaceVariant, fontWeight: direction == 'borrowed' ? FontWeight.bold : FontWeight.normal)),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
               GestureDetector(
@@ -642,7 +722,7 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                       Icon(Icons.calendar_today, color: cs.onSurfaceVariant, size: 18),
                       const SizedBox(width: 12),
                       Text(
-                        DateFormat('dd MMM yyyy').format(selectedDate),
+                        'Loan Date: ${DateFormat('dd MMM yyyy').format(selectedDate)}',
                         style: TextStyle(color: cs.onSurface, fontSize: 14),
                       ),
                     ],
@@ -666,10 +746,90 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                 keyboardType: TextInputType.number,
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: cs.onSurface),
                 decoration: InputDecoration(
-                  hintText: 'Amount', hintStyle: TextStyle(color: Colors.grey),
+                  hintText: 'Principal Amount', hintStyle: TextStyle(color: Colors.grey),
                   prefixText: '₹ ', prefixStyle: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: cs.onSurface),
                   border: InputBorder.none,
                 ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: interestCtrl,
+                      keyboardType: TextInputType.number,
+                      style: TextStyle(color: cs.onSurface),
+                      decoration: InputDecoration(
+                        labelText: 'Interest Rate %',
+                        labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                        filled: true, fillColor: cs.surfaceContainerHighest,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: emiCtrl,
+                      keyboardType: TextInputType.number,
+                      style: TextStyle(color: cs.onSurface),
+                      decoration: InputDecoration(
+                        labelText: 'EMI Amount (optional)',
+                        labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                        filled: true, fillColor: cs.surfaceContainerHighest,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: selectedDueDate,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime(2100),
+                    builder: (ctx, child) => child!,
+                  );
+                  if (picked != null) setModalState(() => selectedDueDate = picked);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.event, color: cs.onSurfaceVariant, size: 18),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Due Date: ${DateFormat('dd MMM yyyy').format(selectedDueDate)}',
+                        style: TextStyle(color: cs.onSurface, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: loanStatus,
+                dropdownColor: cs.surfaceContainerHighest,
+                style: TextStyle(color: cs.onSurface),
+                decoration: InputDecoration(
+                  labelText: 'Status',
+                  labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                  filled: true, fillColor: cs.surfaceContainerHighest,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'active', child: Text('Active')),
+                  DropdownMenuItem(value: 'closed', child: Text('Closed')),
+                  DropdownMenuItem(value: 'defaulted', child: Text('Defaulted')),
+                ],
+                onChanged: (v) => setModalState(() => loanStatus = v!),
               ),
               if (_loanCategories.isNotEmpty) ...[
                 const SizedBox(height: 12),
@@ -696,6 +856,47 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                   metadata: metadata,
                   onChanged: () => setModalState(() {}),
                 ),
+              if (isEdit) ...[
+                const SizedBox(height: 12),
+                TextField(
+                  controller: outstandingCtrl,
+                  keyboardType: TextInputType.number,
+                  style: TextStyle(color: cs.onSurface),
+                  decoration: InputDecoration(
+                    labelText: 'Outstanding Balance',
+                    labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                    filled: true, fillColor: cs.surfaceContainerHighest,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: cs.primary,
+                      side: BorderSide(color: cs.primary),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    icon: const Icon(Icons.payment, size: 18),
+                    label: const Text('Record Repayment'),
+                    onPressed: () => _showRepaymentDialog(loan, () async {
+                      final srv = context.read<AuthProvider>().authService;
+                      if (srv == null) return;
+                      try {
+                        final updated = await srv.database.readLoan(loan['id'] as String);
+                        if (updated != null) {
+                          setModalState(() {
+                            loan.addAll(updated);
+                            outstandingCtrl.text = (updated['outstandingBalance'] as num?)?.toString() ?? '';
+                          });
+                        }
+                      } catch (_) {}
+                    }),
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -726,16 +927,25 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
                       onPressed: () async {
-                        final amount = double.tryParse(amountCtrl.text);
-                        if (personCtrl.text.isEmpty || amount == null || amount <= 0) return;
+                        final principal = double.tryParse(amountCtrl.text);
+                        if (personCtrl.text.isEmpty || principal == null || principal <= 0) return;
                         final srv = context.read<AuthProvider>().authService;
                         if (srv == null) return;
                         try {
                           final data = {
                             'id': loan?['id'] ?? const Uuid().v4(),
+                            'lenderBorrower': personCtrl.text,
                             'personName': personCtrl.text,
-                            'amount': amount,
-                            'loanType': loanType,
+                            'principal': principal,
+                            'amount': principal,
+                            'direction': direction,
+                            'loanType': direction == 'lent' ? 'To Receive' : 'To Pay',
+                            'interestRate': double.tryParse(interestCtrl.text) ?? 0,
+                            'emiAmount': double.tryParse(emiCtrl.text) ?? 0,
+                            'dueDate': selectedDueDate.toIso8601String(),
+                            'status': loanStatus,
+                            'outstandingBalance': isEdit ? (double.tryParse(outstandingCtrl.text) ?? principal) : principal,
+                            'repaymentHistory': loan?['repaymentHistory'] ?? [],
                             'category': loanCategory,
                             'dateTime': selectedDate.toIso8601String(),
                             'metadata': encodeMetadata(metadata),
@@ -764,6 +974,136 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+          ),
+        ),
+      );
+    },
+  );
+  }
+
+  void _showRepaymentDialog(Map<String, dynamic> loan, VoidCallback onSaved) {
+    final repaymentAmountCtrl = TextEditingController();
+    final notesCtrl = TextEditingController();
+    DateTime repaymentDate = DateTime.now();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return Container(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(ctx).viewInsets.bottom,
+          left: 24, right: 24, top: 24,
+        ),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: StatefulBuilder(
+          builder: (ctx, setModalState) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 20),
+              Text('Record Repayment', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: cs.onSurface)),
+              const SizedBox(height: 20),
+              TextField(
+                controller: repaymentAmountCtrl,
+                keyboardType: TextInputType.number,
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: cs.onSurface),
+                decoration: InputDecoration(
+                  hintText: 'Amount', hintStyle: TextStyle(color: Colors.grey),
+                  prefixText: '₹ ', prefixStyle: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: cs.onSurface),
+                  border: InputBorder.none,
+                ),
+              ),
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: repaymentDate,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime.now(),
+                    builder: (ctx, child) => child!,
+                  );
+                  if (picked != null) setModalState(() => repaymentDate = picked);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.calendar_today, color: cs.onSurfaceVariant, size: 18),
+                      const SizedBox(width: 12),
+                      Text(
+                        DateFormat('dd MMM yyyy').format(repaymentDate),
+                        style: TextStyle(color: cs.onSurface, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: notesCtrl,
+                style: TextStyle(color: cs.onSurface),
+                decoration: InputDecoration(
+                  labelText: 'Notes (optional)',
+                  labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                  filled: true, fillColor: cs.surfaceContainerHighest,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.success,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  onPressed: () async {
+                    final amount = double.tryParse(repaymentAmountCtrl.text);
+                    if (amount == null || amount <= 0) return;
+                    final srv = context.read<AuthProvider>().authService;
+                    if (srv == null) return;
+                    try {
+                      await srv.database.addLoanRepayment({
+                        'id': const Uuid().v4(),
+                        'loanId': loan['id'] as String,
+                        'amount': amount,
+                        'dateTime': repaymentDate.toIso8601String(),
+                        'notes': notesCtrl.text,
+                      });
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      onSaved();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Repayment recorded'), backgroundColor: AppColors.success),
+                        );
+                      }
+                    } catch (e) {
+                      if (ctx.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error: $e'), backgroundColor: cs.error),
+                        );
+                      }
+                    }
+                  },
+                  child: const Text('Save Repayment', style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
               ),
               const SizedBox(height: 16),
             ],
@@ -854,9 +1194,14 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
         itemBuilder: (context, index) {
           final inv = _investments[index];
           final units = (inv['units'] as num?)?.toDouble() ?? 0;
-          final price = (inv['pricePerUnit'] as num?)?.toDouble() ?? 0;
-          final totalValue = units * price;
+          final buyPrice = (inv['buyPrice'] as num?)?.toDouble() ?? (inv['pricePerUnit'] as num?)?.toDouble() ?? 0;
+          final currentPrice = (inv['currentPrice'] as num?)?.toDouble() ?? buyPrice;
+          final invested = units * buyPrice;
+          final currentValue = units * currentPrice;
+          final gainLoss = currentValue - invested;
+          final gainLossPct = invested > 0 ? (gainLoss / invested * 100) : 0.0;
           final dt = DateTime.tryParse(inv['dateTime'] as String? ?? '');
+          final symbol = inv['symbol'] as String? ?? '';
           return Container(
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(16),
@@ -882,19 +1227,36 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(inv['name'] ?? 'Investment', style: TextStyle(color: cs.onSurface, fontSize: 15)),
+                        if (symbol.isNotEmpty)
+                          Text(symbol, style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                        const SizedBox(height: 2),
                         Row(
                           children: [
-                            Text('${inv['units']} units @ ₹${inv['pricePerUnit']}', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                            Text('$units units @ ₹${buyPrice.toStringAsFixed(2)}', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
                             if (dt != null) ...[
                               const SizedBox(width: 6),
                               Text(DateFormat('dd/MM').format(dt), style: const TextStyle(color: AppColors.textTertiary, fontSize: 10)),
                             ],
                           ],
                         ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Current: ₹${currentValue.toStringAsFixed(2)}',
+                          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${gainLoss >= 0 ? '+' : ''}${gainLoss.toStringAsFixed(2)} (${gainLossPct.toStringAsFixed(1)}%)',
+                          style: TextStyle(
+                            color: gainLoss >= 0 ? AppColors.success : cs.error,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                  Text('₹${totalValue.toStringAsFixed(2)}', style: TextStyle(color: cs.tertiary, fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text('₹${currentValue.toStringAsFixed(2)}', style: TextStyle(color: cs.tertiary, fontSize: 16, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -909,8 +1271,11 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
 
   void _showInvestmentDialog({Map<String, dynamic>? inv}) {
     final nameCtrl = TextEditingController(text: inv?['name'] as String? ?? '');
+    final symbolCtrl = TextEditingController(text: inv?['symbol'] as String? ?? '');
     final unitsCtrl = TextEditingController(text: inv?['units']?.toString() ?? '');
-    final priceCtrl = TextEditingController(text: inv?['pricePerUnit']?.toString() ?? '');
+    final buyPriceCtrl = TextEditingController(text: inv?['buyPrice']?.toString() ?? inv?['pricePerUnit']?.toString() ?? '');
+    final currentPriceCtrl = TextEditingController(text: inv?['currentPrice']?.toString() ?? inv?['buyPrice']?.toString() ?? inv?['pricePerUnit']?.toString() ?? '');
+    final notesCtrl = TextEditingController(text: inv?['notes'] as String? ?? '');
     DateTime selectedDate = DateTime.tryParse(inv?['dateTime'] as String? ?? '') ?? DateTime.now();
     String type = inv?['type'] as String? ?? 'equity';
     String invCategory = inv?['category'] as String? ?? '';
@@ -933,7 +1298,8 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: StatefulBuilder(
-          builder: (ctx, setModalState) => Column(
+          builder: (ctx, setModalState) => SingleChildScrollView(
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -976,6 +1342,17 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                 style: TextStyle(color: cs.onSurface),
                 decoration: InputDecoration(
                   labelText: 'Instrument Name',
+                  labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                  filled: true, fillColor: cs.surfaceContainerHighest,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: symbolCtrl,
+                style: TextStyle(color: cs.onSurface),
+                decoration: InputDecoration(
+                  labelText: 'Symbol / Ticker (optional)',
                   labelStyle: TextStyle(color: cs.onSurfaceVariant),
                   filled: true, fillColor: cs.surfaceContainerHighest,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
@@ -1044,11 +1421,11 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: TextField(
-                      controller: priceCtrl,
+                      controller: buyPriceCtrl,
                       keyboardType: TextInputType.number,
                       style: TextStyle(color: cs.onSurface),
                       decoration: InputDecoration(
-                        labelText: 'Price/Unit',
+                        labelText: 'Buy Price',
                         labelStyle: TextStyle(color: cs.onSurfaceVariant),
                         filled: true, fillColor: cs.surfaceContainerHighest,
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
@@ -1056,6 +1433,30 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: currentPriceCtrl,
+                keyboardType: TextInputType.number,
+                style: TextStyle(color: cs.onSurface),
+                decoration: InputDecoration(
+                  labelText: 'Current Price (optional)',
+                  labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                  filled: true, fillColor: cs.surfaceContainerHighest,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: notesCtrl,
+                maxLines: 3,
+                style: TextStyle(color: cs.onSurface),
+                decoration: InputDecoration(
+                  labelText: 'Notes (optional)',
+                  labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                  filled: true, fillColor: cs.surfaceContainerHighest,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                ),
               ),
               const SizedBox(height: 24),
               Row(
@@ -1088,18 +1489,23 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                       ),
                       onPressed: () async {
                         final units = double.tryParse(unitsCtrl.text);
-                        final price = double.tryParse(priceCtrl.text);
-                        if (nameCtrl.text.isEmpty || units == null || units <= 0 || price == null || price <= 0) return;
+                        final buyPrice = double.tryParse(buyPriceCtrl.text);
+                        if (nameCtrl.text.isEmpty || units == null || units <= 0 || buyPrice == null || buyPrice <= 0) return;
+                        final currentPrice = double.tryParse(currentPriceCtrl.text) ?? buyPrice;
                         final srv = context.read<AuthProvider>().authService;
                         if (srv == null) return;
                         try {
                           final data = {
                             'id': inv?['id'] ?? const Uuid().v4(),
                             'name': nameCtrl.text,
+                            'symbol': symbolCtrl.text,
                             'type': type,
                             'category': invCategory,
                             'units': units,
-                            'pricePerUnit': price,
+                            'buyPrice': buyPrice,
+                            'pricePerUnit': buyPrice,
+                            'currentPrice': currentPrice,
+                            'notes': notesCtrl.text,
                             'dateTime': selectedDate.toIso8601String(),
                             'metadata': encodeMetadata(metadata),
                           };
@@ -1130,6 +1536,7 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
               ),
               const SizedBox(height: 16),
             ],
+          ),
           ),
         ),
       );

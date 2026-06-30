@@ -10,6 +10,7 @@ import 'package:money_manager/features/dashboard/screens/dashboard_screen.dart';
 import 'package:money_manager/features/expenses/screens/expenses_screen.dart';
 import 'package:money_manager/features/shared/screens/other_entries_screen.dart';
 import 'package:money_manager/features/shared/screens/settings_screen.dart';
+import 'package:money_manager/features/reports/screens/reports_screen.dart';
 
 class MainAppScreen extends StatefulWidget {
   const MainAppScreen({super.key});
@@ -23,6 +24,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
     DashboardScreen(),
     ExpensesScreen(),
     OtherEntriesScreen(),
+    ReportsScreen(),
     SettingsScreen(),
   ];
 
@@ -59,6 +61,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
             BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
             BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'Expenses'),
             BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: 'More'),
+            BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'Reports'),
             BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
           ],
         ),

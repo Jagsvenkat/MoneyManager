@@ -8,18 +8,21 @@ String _safeErrorMessage(Object e) {
   if (msg.contains('Invalid password')) return 'Incorrect password. Try again.';
   if (msg.contains('Password must be at least')) return 'Password must be at least 12 characters.';
   if (msg.contains('No backup UMK')) return 'Account data missing. Please re-register.';
+  if (msg.contains('No cloud backup found')) return 'No cloud backup found. Check your GitHub settings or register first.';
   return 'Something went wrong. Please try again.';
 }
 
 class AuthProvider extends ChangeNotifier {
   AuthService? _authService;
   bool _isAuthenticated = false;
+  bool _isInitializing = true;
   String? _currentUserId;
   bool _isLoading = false;
   String? _error;
   String? _rawError;
 
   bool get isAuthenticated => _isAuthenticated;
+  bool get isInitializing => _isInitializing;
   String? get currentUserId => _currentUserId;
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -27,6 +30,9 @@ class AuthProvider extends ChangeNotifier {
   AuthService? get authService => _authService;
 
   Future<void> initialize() async {
+    _isInitializing = true;
+    notifyListeners();
+
     _authService = AuthService();
     await _authService!.initialize();
 
@@ -36,6 +42,8 @@ class AuthProvider extends ChangeNotifier {
       _isAuthenticated = true;
       _currentUserId = _authService!.currentUserId;
     }
+
+    _isInitializing = false;
     notifyListeners();
   }
 
@@ -61,6 +69,39 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> registerWithCloudBackup(
+    String email,
+    String password, {
+    required String githubToken,
+    required String repoOwner,
+    required String repoName,
+  }) async {
+    if (_authService == null) return false;
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _authService!.register(username: email, password: password);
+      await _authService!.uploadBootstrap(
+        githubToken: githubToken,
+        repoOwner: repoOwner,
+        repoName: repoName,
+      );
+      _isAuthenticated = true;
+      _currentUserId = email;
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = _safeErrorMessage(e);
+      _rawError = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<bool> login(String email, String password) async {
     if (_authService == null) return false;
     _isLoading = true;
@@ -69,6 +110,39 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       await _authService!.login(username: email, password: password);
+      _isAuthenticated = true;
+      _currentUserId = email;
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = _safeErrorMessage(e);
+      _rawError = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> loginWithCloudBootstrap(
+    String email,
+    String password, {
+    required String githubToken,
+    required String repoOwner,
+    required String repoName,
+  }) async {
+    if (_authService == null) return false;
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _authService!.loginWithBootstrap(
+        email, password,
+        githubToken: githubToken,
+        repoOwner: repoOwner,
+        repoName: repoName,
+      );
       _isAuthenticated = true;
       _currentUserId = email;
       _isLoading = false;

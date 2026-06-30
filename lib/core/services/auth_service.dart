@@ -9,6 +9,7 @@ import '../security/kdf.dart';
 import '../security/secure_storage.dart';
 import '../security/envelope.dart';
 import '../database/local_database.dart';
+import 'github_sync_service.dart';
 
 /// Secure random number generator
 class SecureRandom {
@@ -195,6 +196,128 @@ class AuthService {
 
     // Save session for auto-login
     await saveSession();
+  }
+
+  /// Upload bootstrap data (KDF params + encrypted UMK) to GitHub
+  Future<void> uploadBootstrap({
+    required String githubToken,
+    required String repoOwner,
+    required String repoName,
+  }) async {
+    final kdfParams = await SecureStorageService.loadKdfParams(_currentUserId);
+    if (kdfParams == null) throw Exception('KDF params not found');
+
+    final encryptedUmk = await SecureStorageService.loadEncryptedUmk(_currentUserId);
+    if (encryptedUmk == null) throw Exception('Encrypted UMK not found');
+
+    final salt = kdfParams['salt'] as Uint8List;
+    final algorithm = kdfParams['algorithm'] as String;
+    final params = KdfParams.fromJson(kdfParams);
+
+    final syncService = GitHubSyncService(
+      githubToken: githubToken,
+      repoOwner: repoOwner,
+      repoName: repoName,
+      db: _db,
+      userId: _currentUserId,
+      deviceId: _deviceId,
+    );
+
+    final result = await syncService.uploadAccountBootstrap(
+      salt: salt,
+      algorithm: algorithm,
+      iterations: params.iterations,
+      outputLength: params.outputLength,
+      encryptedUmk: encryptedUmk,
+    );
+
+    if (!result.success) {
+      throw Exception(result.error ?? 'Failed to upload bootstrap');
+    }
+  }
+
+  /// Log in using a bootstrap record fetched from GitHub.
+  /// Used on a new device where the user has no local credentials yet.
+  Future<void> loginWithBootstrap(String username, String password, {
+    required String githubToken,
+    required String repoOwner,
+    required String repoName,
+  }) async {
+    final syncService = GitHubSyncService(
+      githubToken: githubToken,
+      repoOwner: repoOwner,
+      repoName: repoName,
+      db: _db,
+      userId: username,
+      deviceId: _deviceId,
+    );
+
+    final bootstrap = await syncService.fetchAccountBootstrap(username);
+    if (bootstrap == null) throw Exception('No cloud backup found for this account');
+
+    final salt = base64Decode(bootstrap['salt'] as String);
+    final algorithm = bootstrap['algorithm'] as String;
+    final iterations = bootstrap['iterations'] as int;
+    final outputLength = bootstrap['outputLength'] as int;
+    final encryptedUmk = bootstrap['encryptedUmk'] as String;
+
+    final params = KdfParams(
+      algorithm: algorithm,
+      iterations: iterations,
+      outputLength: outputLength,
+    );
+
+    final umk = await KeyDerivationFunction.deriveUserMasterKey(
+      username,
+      password,
+      salt,
+      params: params,
+    );
+
+    try {
+      await _decryptUmkBackup(encryptedUmk, password);
+    } catch (e) {
+      throw Exception('Invalid password');
+    }
+
+    _currentUserId = username;
+    _userMasterKey = umk;
+
+    await SecureStorageService.saveKdfParams(
+      userId: username,
+      salt: salt,
+      algorithm: algorithm,
+      params: params.toJson(),
+    );
+    await SecureStorageService.saveEncryptedUmk(
+      userId: username,
+      encryptedUmk: encryptedUmk,
+    );
+
+    await _db.initialize(
+      userId: username,
+      deviceId: _deviceId,
+      wrappingKey: _userMasterKey,
+    );
+
+    await saveSession();
+  }
+
+  /// Check if a bootstrap record exists for [username] on GitHub.
+  Future<bool> checkBootstrapExists(String username, {
+    required String githubToken,
+    required String repoOwner,
+    required String repoName,
+  }) async {
+    final syncService = GitHubSyncService(
+      githubToken: githubToken,
+      repoOwner: repoOwner,
+      repoName: repoName,
+      db: _db,
+      userId: username,
+      deviceId: _deviceId,
+    );
+    return syncService.accountBootstrapExists(username);
   }
 
   /// Get current user

@@ -20,6 +20,12 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   List<Map<String, dynamic>> _expenses = [];
   List<Map<String, dynamic>> _categories = [];
   bool _isLoading = true;
+  DateTime? _filterStartDate;
+  DateTime? _filterEndDate;
+  double? _filterMinAmount;
+  double? _filterMaxAmount;
+  String? _filterTag;
+  String? _filterMetadata;
 
   @override
   void didChangeDependencies() {
@@ -40,6 +46,13 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       final cats = await authService.database.listCategories(type: 'expense');
       final expenses = await authService.database.listExpenses(
         categoryFilter: _selectedCategory != null && _selectedCategory != 'All' ? _selectedCategory : null,
+        searchText: _searchController.text.isNotEmpty ? _searchController.text : null,
+        tagFilter: _filterTag,
+        startDate: _filterStartDate,
+        endDate: _filterEndDate,
+        minAmount: _filterMinAmount,
+        maxAmount: _filterMaxAmount,
+        metadataFilter: _filterMetadata,
       );
       expenses.sort((a, b) {
         final da = DateTime.tryParse(a['dateTime'] as String? ?? '');
@@ -544,6 +557,282 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     }
   }
 
+  void _showFilterDialog() {
+    final cs = Theme.of(context).colorScheme;
+    DateTime? tempStartDate = _filterStartDate;
+    DateTime? tempEndDate = _filterEndDate;
+    final minAmountCtrl = TextEditingController(text: _filterMinAmount?.toString() ?? '');
+    final maxAmountCtrl = TextEditingController(text: _filterMaxAmount?.toString() ?? '');
+    final tagCtrl = TextEditingController(text: _filterTag ?? '');
+    final metadataCtrl = TextEditingController(text: _filterMetadata ?? '');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom,
+            left: 24, right: 24, top: 24,
+          ),
+          decoration: BoxDecoration(
+            color: cs.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: StatefulBuilder(
+            builder: (ctx, setModalState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(2)))),
+                  const SizedBox(height: 20),
+                  Text('Filters', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: cs.onSurface)),
+                  const SizedBox(height: 20),
+                  Text('Date Range', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: tempStartDate ?? DateTime.now(),
+                              firstDate: DateTime(2000),
+                              lastDate: DateTime.now(),
+                            );
+                            if (picked != null) setModalState(() => tempStartDate = picked);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: cs.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.calendar_today, color: cs.onSurfaceVariant, size: 16),
+                                const SizedBox(width: 8),
+                                Text(
+                                  tempStartDate != null ? DateFormat('dd MMM').format(tempStartDate!) : 'From',
+                                  style: TextStyle(color: tempStartDate != null ? cs.onSurface : cs.onSurfaceVariant, fontSize: 13),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: tempEndDate ?? DateTime.now(),
+                              firstDate: DateTime(2000),
+                              lastDate: DateTime.now(),
+                            );
+                            if (picked != null) setModalState(() => tempEndDate = picked);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: cs.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.calendar_today, color: cs.onSurfaceVariant, size: 16),
+                                const SizedBox(width: 8),
+                                Text(
+                                  tempEndDate != null ? DateFormat('dd MMM').format(tempEndDate!) : 'To',
+                                  style: TextStyle(color: tempEndDate != null ? cs.onSurface : cs.onSurfaceVariant, fontSize: 13),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Amount Range', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: minAmountCtrl,
+                          keyboardType: TextInputType.number,
+                          style: TextStyle(color: cs.onSurface),
+                          decoration: InputDecoration(
+                            hintText: 'Min',
+                            hintStyle: TextStyle(color: cs.onSurfaceVariant),
+                            filled: true,
+                            fillColor: cs.surfaceContainerHighest,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: maxAmountCtrl,
+                          keyboardType: TextInputType.number,
+                          style: TextStyle(color: cs.onSurface),
+                          decoration: InputDecoration(
+                            hintText: 'Max',
+                            hintStyle: TextStyle(color: cs.onSurfaceVariant),
+                            filled: true,
+                            fillColor: cs.surfaceContainerHighest,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: tagCtrl,
+                    style: TextStyle(color: cs.onSurface),
+                    decoration: InputDecoration(
+                      labelText: 'Tag',
+                      labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                      hintText: 'Filter by tag...',
+                      hintStyle: TextStyle(color: cs.onSurfaceVariant),
+                      filled: true,
+                      fillColor: cs.surfaceContainerHighest,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: metadataCtrl,
+                    style: TextStyle(color: cs.onSurface),
+                    decoration: InputDecoration(
+                      labelText: 'Metadata',
+                      labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                      hintText: 'Search metadata...',
+                      hintStyle: TextStyle(color: cs.onSurfaceVariant),
+                      filled: true,
+                      fillColor: cs.surfaceContainerHighest,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: cs.onSurfaceVariant,
+                            side: BorderSide(color: cs.surfaceContainerHighest),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _filterStartDate = null;
+                              _filterEndDate = null;
+                              _filterMinAmount = null;
+                              _filterMaxAmount = null;
+                              _filterTag = null;
+                              _filterMetadata = null;
+                            });
+                            _loadData();
+                            Navigator.pop(ctx);
+                          },
+                          child: const Text('Reset'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: cs.primary,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _filterStartDate = tempStartDate;
+                              _filterEndDate = tempEndDate;
+                              _filterMinAmount = double.tryParse(minAmountCtrl.text);
+                              _filterMaxAmount = double.tryParse(maxAmountCtrl.text);
+                              _filterTag = tagCtrl.text.isNotEmpty ? tagCtrl.text : null;
+                              _filterMetadata = metadataCtrl.text.isNotEmpty ? metadataCtrl.text : null;
+                            });
+                            _loadData();
+                            Navigator.pop(ctx);
+                          },
+                          child: const Text('Apply', style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  String _buildDateFilterLabel() {
+    if (_filterStartDate != null && _filterEndDate != null) {
+      return '${DateFormat('dd MMM').format(_filterStartDate!)} - ${DateFormat('dd MMM').format(_filterEndDate!)}';
+    } else if (_filterStartDate != null) {
+      return 'From ${DateFormat('dd MMM').format(_filterStartDate!)}';
+    } else if (_filterEndDate != null) {
+      return 'Until ${DateFormat('dd MMM').format(_filterEndDate!)}';
+    }
+    return '';
+  }
+
+  String _buildAmountFilterLabel() {
+    if (_filterMinAmount != null && _filterMaxAmount != null) {
+      return '₹${_filterMinAmount!.toStringAsFixed(0)} - ₹${_filterMaxAmount!.toStringAsFixed(0)}';
+    } else if (_filterMinAmount != null) {
+      return 'Min ₹${_filterMinAmount!.toStringAsFixed(0)}';
+    } else if (_filterMaxAmount != null) {
+      return 'Max ₹${_filterMaxAmount!.toStringAsFixed(0)}';
+    }
+    return '';
+  }
+
+  Widget _activeFilterChip({required String label, required VoidCallback onRemove}) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Container(
+        padding: const EdgeInsets.only(left: 10, right: 4, top: 4, bottom: 4),
+        decoration: BoxDecoration(
+          color: cs.primary.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cs.primary.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label, style: TextStyle(fontSize: 11, color: cs.primary)),
+            const SizedBox(width: 2),
+            GestureDetector(
+              onTap: onRemove,
+              child: Icon(Icons.close, size: 14, color: cs.primary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -702,25 +991,35 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   }
 
   Widget _buildFilterBar() {
+    final cs = Theme.of(context).colorScheme;
+    final hasFilters = _filterStartDate != null || _filterEndDate != null ||
+        _filterMinAmount != null || _filterMaxAmount != null ||
+        _filterTag != null;
+    final filterCount = [
+      if (_filterStartDate != null || _filterEndDate != null) 1,
+      if (_filterMinAmount != null || _filterMaxAmount != null) 1,
+      if (_filterTag != null) 1,
+    ].length;
+
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         children: [
           TextField(
             controller: _searchController,
-            style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+            style: TextStyle(color: cs.onSurface),
             decoration: InputDecoration(
               hintText: 'Search expenses...',
               hintStyle: const TextStyle(color: AppColors.textTertiary),
-              prefixIcon: Icon(Icons.search, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              prefixIcon: Icon(Icons.search, color: cs.onSurfaceVariant),
               border: InputBorder.none,
               filled: true,
-              fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+              fillColor: cs.surfaceContainerHighest,
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -728,13 +1027,92 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+                borderSide: BorderSide(color: cs.primary),
               ),
             ),
             onChanged: (_) => _loadData(),
           ),
           const SizedBox(height: 12),
           _buildSortBar(),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      if (_filterStartDate != null || _filterEndDate != null)
+                        _activeFilterChip(
+                          label: _buildDateFilterLabel(),
+                          onRemove: () => setState(() { _filterStartDate = null; _filterEndDate = null; _loadData(); }),
+                        ),
+                      if (_filterMinAmount != null || _filterMaxAmount != null)
+                        _activeFilterChip(
+                          label: _buildAmountFilterLabel(),
+                          onRemove: () => setState(() { _filterMinAmount = null; _filterMaxAmount = null; _loadData(); }),
+                        ),
+                      if (_filterTag != null)
+                        _activeFilterChip(
+                          label: 'Tag: $_filterTag',
+                          onRemove: () => setState(() { _filterTag = null; _loadData(); }),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              InkWell(
+                onTap: _showFilterDialog,
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: hasFilters ? cs.primary.withValues(alpha: 0.2) : cs.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: hasFilters ? cs.primary : Colors.transparent),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.filter_list, size: 16, color: hasFilters ? cs.primary : cs.onSurfaceVariant),
+                      const SizedBox(width: 4),
+                      Text(
+                        hasFilters ? 'Filters ($filterCount)' : 'Filters',
+                        style: TextStyle(fontSize: 12, color: hasFilters ? cs.primary : cs.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (hasFilters) ...[
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: () => setState(() {
+                    _filterStartDate = null; _filterEndDate = null;
+                    _filterMinAmount = null; _filterMaxAmount = null;
+                    _filterTag = null; _filterMetadata = null;
+                    _loadData();
+                  }),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.close, size: 14, color: cs.onSurfaceVariant),
+                        const SizedBox(width: 4),
+                        Text('Reset', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
           const SizedBox(height: 12),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -746,7 +1124,6 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                   padding: const EdgeInsets.only(right: 8),
                   child: _filterChip(c['name'] as String, Icons.category),
                 )),
-                _filterChip('Date', Icons.date_range),
               ],
             ),
           ),

@@ -80,13 +80,22 @@ class WebSecureStorage implements SecureStorageProvider {
 /// Main secure storage service
 class SecureStorageService {
   static late SecureStorageProvider _provider;
+  static bool _initialized = false;
+
+  /// Set a custom provider (used for testing with in-memory storage)
+  static void setProviderForTest(SecureStorageProvider provider) {
+    _provider = provider;
+    _initialized = true;
+  }
 
   static Future<void> initialize() async {
+    if (_initialized) return;
     if (kIsWeb) {
       _provider = WebSecureStorage();
     } else {
       _provider = NativeSecureStorage();
     }
+    _initialized = true;
   }
 
   /// Save KDF parameters (salt, algorithm, etc.)

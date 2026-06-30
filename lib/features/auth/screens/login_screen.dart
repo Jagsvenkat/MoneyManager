@@ -16,11 +16,18 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
+  bool _isRestoreMode = false;
+  final _githubTokenController = TextEditingController();
+  final _githubOwnerController = TextEditingController();
+  final _githubRepoController = TextEditingController();
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _githubTokenController.dispose();
+    _githubOwnerController.dispose();
+    _githubRepoController.dispose();
     super.dispose();
   }
 
@@ -42,6 +49,33 @@ class _LoginScreenState extends State<LoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(detail != null ? '$msg\n$detail' : msg),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _restoreFromCloud() async {
+    if (_formKey.currentState!.validate()) {
+      final authProvider = context.read<AuthProvider>();
+      final success = await authProvider.loginWithCloudBootstrap(
+        _emailController.text.trim(),
+        _passwordController.text,
+        githubToken: _githubTokenController.text.trim(),
+        repoOwner: _githubOwnerController.text.trim(),
+        repoName: _githubRepoController.text.trim(),
+      );
+
+      if (!mounted) return;
+
+      if (success) {
+        context.go('/');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(authProvider.error ?? 'Restore failed'),
             backgroundColor: AppColors.error,
             duration: const Duration(seconds: 5),
           ),
@@ -185,6 +219,114 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: () => setState(() => _isRestoreMode = !_isRestoreMode),
+                    icon: Icon(
+                      _isRestoreMode ? Icons.expand_less : Icons.cloud_download,
+                      color: AppColors.textSecondary, size: 20,
+                    ),
+                    label: Text(
+                      _isRestoreMode ? 'Hide cloud restore' : 'Restore from cloud backup',
+                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                    ),
+                  ),
+                  if (_isRestoreMode) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Enter the same GitHub credentials used on your other device. '
+                      'Required only once to recover your account.',
+                      style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _githubTokenController,
+                      obscureText: true,
+                      decoration: InputDecoration(
+                        labelText: 'GitHub Token (PAT)',
+                        labelStyle: const TextStyle(color: AppColors.textSecondary),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                        ),
+                        filled: true,
+                        fillColor: AppColors.surface,
+                        prefixIcon: const Icon(Icons.key, color: AppColors.textSecondary),
+                      ),
+                      style: const TextStyle(color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _githubOwnerController,
+                            decoration: InputDecoration(
+                              labelText: 'Repo Owner',
+                              labelStyle: const TextStyle(color: AppColors.textSecondary),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                              ),
+                              filled: true,
+                              fillColor: AppColors.surface,
+                              prefixIcon: const Icon(Icons.person, color: AppColors.textSecondary),
+                            ),
+                            style: const TextStyle(color: AppColors.textPrimary),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _githubRepoController,
+                            decoration: InputDecoration(
+                              labelText: 'Repo Name',
+                              labelStyle: const TextStyle(color: AppColors.textSecondary),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                              ),
+                              filled: true,
+                              fillColor: AppColors.surface,
+                              prefixIcon: const Icon(Icons.folder, color: AppColors.textSecondary),
+                            ),
+                            style: const TextStyle(color: AppColors.textPrimary),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Consumer<AuthProvider>(
+                      builder: (context, authProvider, _) {
+                        return ElevatedButton(
+                          onPressed: authProvider.isLoading ? null : _restoreFromCloud,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.secondary,
+                            disabledBackgroundColor: AppColors.textTertiary,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: authProvider.isLoading
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.background),
+                                  ),
+                                )
+                              : const Text(
+                                  'Restore from Cloud',
+                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.background),
+                                ),
+                        );
+                      },
+                    ),
+                  ],
                 ],
               ),
             ),

@@ -12,6 +12,7 @@
         "cupertino_icons",
         "dio",
         "excel",
+        "file_picker",
         "fl_chart",
         "flutter",
         "flutter_secure_storage",
@@ -167,6 +168,22 @@
         "stream_channel",
         "test_api",
         "vector_math"
+      ]
+    },
+    {
+      "name": "file_picker",
+      "version": "11.0.2",
+      "dependencies": [
+        "cross_file",
+        "dbus",
+        "ffi",
+        "flutter",
+        "flutter_plugin_android_lifecycle",
+        "flutter_web_plugins",
+        "path",
+        "plugin_platform_interface",
+        "web",
+        "win32"
       ]
     },
     {
@@ -800,9 +817,38 @@
       "dependencies": []
     },
     {
+      "name": "plugin_platform_interface",
+      "version": "2.1.8",
+      "dependencies": [
+        "meta"
+      ]
+    },
+    {
+      "name": "flutter_web_plugins",
+      "version": "0.0.0",
+      "dependencies": [
+        "flutter"
+      ]
+    },
+    {
+      "name": "flutter_plugin_android_lifecycle",
+      "version": "2.0.35",
+      "dependencies": [
+        "flutter"
+      ]
+    },
+    {
       "name": "ffi",
       "version": "2.2.0",
       "dependencies": []
+    },
+    {
+      "name": "cross_file",
+      "version": "0.3.5+2",
+      "dependencies": [
+        "meta",
+        "web"
+      ]
     },
     {
       "name": "url_launcher_platform_interface",
@@ -857,21 +903,6 @@
         "path_provider",
         "plugin_platform_interface",
         "uuid"
-      ]
-    },
-    {
-      "name": "flutter_web_plugins",
-      "version": "0.0.0",
-      "dependencies": [
-        "flutter"
-      ]
-    },
-    {
-      "name": "cross_file",
-      "version": "0.3.5+2",
-      "dependencies": [
-        "meta",
-        "web"
       ]
     },
     {
@@ -1236,20 +1267,6 @@
       ]
     },
     {
-      "name": "plugin_platform_interface",
-      "version": "2.1.8",
-      "dependencies": [
-        "meta"
-      ]
-    },
-    {
-      "name": "flutter_plugin_android_lifecycle",
-      "version": "2.0.35",
-      "dependencies": [
-        "flutter"
-      ]
-    },
-    {
       "name": "platform",
       "version": "3.1.6",
       "dependencies": []
@@ -1353,6 +1370,16 @@
         "collection",
         "meta",
         "pub_semver"
+      ]
+    },
+    {
+      "name": "dbus",
+      "version": "0.7.14",
+      "dependencies": [
+        "args",
+        "ffi",
+        "meta",
+        "xml"
       ]
     }
   ],

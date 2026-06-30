@@ -20,12 +20,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
   bool _termsAccepted = false;
+  bool _useCloudBackup = false;
+  final _githubTokenController = TextEditingController();
+  final _githubOwnerController = TextEditingController();
+  final _githubRepoController = TextEditingController();
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _githubTokenController.dispose();
+    _githubOwnerController.dispose();
+    _githubRepoController.dispose();
     super.dispose();
   }
 
@@ -42,10 +49,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
       }
 
       final authProvider = context.read<AuthProvider>();
-      final success = await authProvider.register(
-        _emailController.text.trim(),
-        _passwordController.text,
-      );
+      final success = _useCloudBackup
+          ? await authProvider.registerWithCloudBackup(
+              _emailController.text.trim(),
+              _passwordController.text,
+              githubToken: _githubTokenController.text.trim(),
+              repoOwner: _githubOwnerController.text.trim(),
+              repoName: _githubRepoController.text.trim(),
+            )
+          : await authProvider.register(
+              _emailController.text.trim(),
+              _passwordController.text,
+            );
 
       if (!mounted) return;
 
@@ -207,7 +222,93 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: _useCloudBackup,
+                        onChanged: (v) => setState(() => _useCloudBackup = v ?? false),
+                        activeColor: AppColors.primary,
+                      ),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(() => _useCloudBackup = !_useCloudBackup),
+                          child: const Text(
+                            'Enable cloud backup to restore account on another device',
+                            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_useCloudBackup) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Enter GitHub credentials for backup. Required only on the first device.',
+                      style: TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _githubTokenController,
+                      obscureText: true,
+                      decoration: InputDecoration(
+                        labelText: 'GitHub Token (PAT)',
+                        labelStyle: const TextStyle(color: AppColors.textSecondary),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                        ),
+                        filled: true,
+                        fillColor: AppColors.surface,
+                        prefixIcon: const Icon(Icons.key, color: AppColors.textSecondary),
+                      ),
+                      style: const TextStyle(color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _githubOwnerController,
+                            decoration: InputDecoration(
+                              labelText: 'Repo Owner',
+                              labelStyle: const TextStyle(color: AppColors.textSecondary),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                              ),
+                              filled: true,
+                              fillColor: AppColors.surface,
+                              prefixIcon: const Icon(Icons.person, color: AppColors.textSecondary),
+                            ),
+                            style: const TextStyle(color: AppColors.textPrimary),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _githubRepoController,
+                            decoration: InputDecoration(
+                              labelText: 'Repo Name',
+                              labelStyle: const TextStyle(color: AppColors.textSecondary),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                              ),
+                              filled: true,
+                              fillColor: AppColors.surface,
+                              prefixIcon: const Icon(Icons.folder, color: AppColors.textSecondary),
+                            ),
+                            style: const TextStyle(color: AppColors.textPrimary),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 16),
 
                   Consumer<AuthProvider>(
                     builder: (context, authProvider, _) {
