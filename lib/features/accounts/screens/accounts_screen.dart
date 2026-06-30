@@ -174,7 +174,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
     final balanceCtrl = TextEditingController(text: account?['balance']?.toString() ?? '');
     final currencyCtrl = TextEditingController(text: account?['currency'] as String? ?? 'INR');
     String selectedType = account?['type'] as String? ?? 'Cash';
-    Color selectedColor = Color(account?['color'] as int? ?? _colorOptions[0]);
+    Color selectedColor = Color((account?['color'] as int?) ?? _colorOptions[0]);
     final isEdit = account != null;
 
     showModalBottomSheet(

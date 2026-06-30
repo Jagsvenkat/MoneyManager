@@ -1422,7 +1422,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (ctx.mounted) {
         ScaffoldMessenger.of(ctx).showSnackBar(
           SnackBar(
-            content: Text(e.message),
+            content: Text(e.message ?? 'OAuth not supported on web'),
             backgroundColor: cs.error,
             duration: const Duration(seconds: 6),
             action: SnackBarAction(
