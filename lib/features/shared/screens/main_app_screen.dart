@@ -20,13 +20,7 @@ class MainAppScreen extends StatefulWidget {
 }
 
 class _MainAppScreenState extends State<MainAppScreen> {
-  final List<Widget> _screens = const [
-    DashboardScreen(),
-    ExpensesScreen(),
-    OtherEntriesScreen(),
-    ReportsScreen(),
-    SettingsScreen(),
-  ];
+  int _expenseRefreshKey = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -34,9 +28,17 @@ class _MainAppScreenState extends State<MainAppScreen> {
     final cs = Theme.of(context).colorScheme;
     final bg = Theme.of(context).scaffoldBackgroundColor;
 
+    final screens = [
+      const DashboardScreen(),
+      ExpensesScreen(key: ValueKey('expenses_$_expenseRefreshKey')),
+      const OtherEntriesScreen(),
+      const ReportsScreen(),
+      const SettingsScreen(),
+    ];
+
     return Scaffold(
       backgroundColor: bg,
-      body: _screens[appProvider.currentTabIndex],
+      body: screens[appProvider.currentTabIndex],
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddExpenseDialog,
         backgroundColor: cs.primary,
@@ -230,6 +232,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
                         'dateTime': selectedDate.toIso8601String(),
                         'metadata': encodeMetadata(metadata),
                       });
+                      setState(() => _expenseRefreshKey++);
                       if (ctx.mounted) {
                         Navigator.pop(ctx);
                         ScaffoldMessenger.of(context).showSnackBar(
