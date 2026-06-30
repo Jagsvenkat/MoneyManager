@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:intl/intl.dart';
 import 'package:money_manager/config/app_colors.dart';
+import 'package:money_manager/features/shared/widgets/category_dependent_fields.dart';
 import 'package:money_manager/providers/auth_provider.dart';
 
 class OtherEntriesScreen extends StatefulWidget {
@@ -17,6 +18,9 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
   List<Map<String, dynamic>> _incomes = [];
   List<Map<String, dynamic>> _loans = [];
   List<Map<String, dynamic>> _investments = [];
+  List<Map<String, dynamic>> _incomeCategories = [];
+  List<Map<String, dynamic>> _loanCategories = [];
+  List<Map<String, dynamic>> _investmentCategories = [];
   bool _isLoading = true;
 
   @override
@@ -33,6 +37,9 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
         authService.database.listIncome(),
         authService.database.listLoans(),
         authService.database.listInvestments(),
+        authService.database.listCategories(type: 'income'),
+        authService.database.listCategories(type: 'loan'),
+        authService.database.listCategories(type: 'investment'),
       ]);
       for (final list in [results[0], results[1], results[2]]) {
         (list as List).sort((a, b) {
@@ -49,6 +56,9 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
           _incomes = results[0].cast<Map<String, dynamic>>();
           _loans = results[1].cast<Map<String, dynamic>>();
           _investments = results[2].cast<Map<String, dynamic>>();
+          _incomeCategories = results[3].cast<Map<String, dynamic>>();
+          _loanCategories = results[4].cast<Map<String, dynamic>>();
+          _investmentCategories = results[5].cast<Map<String, dynamic>>();
           _isLoading = false;
         });
       }
@@ -222,6 +232,8 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
     final sourceCtrl = TextEditingController(text: income?['source'] as String? ?? '');
     DateTime selectedDate = DateTime.tryParse(income?['dateTime'] as String? ?? '') ?? DateTime.now();
     String frequency = income?['frequency'] as String? ?? 'one-time';
+    String incomeCategory = income?['category'] as String? ?? '';
+    Map<String, dynamic> metadata = decodeMetadata(income?['metadata'] as String?);
     final isEdit = income != null;
 
     showModalBottomSheet(
@@ -318,6 +330,31 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                 ],
                 onChanged: (v) => setModalState(() => frequency = v!),
               ),
+              if (_incomeCategories.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: incomeCategory.isEmpty ? null : incomeCategory,
+                  dropdownColor: cs.surfaceContainerHighest,
+                  style: TextStyle(color: cs.onSurface),
+                  decoration: InputDecoration(
+                    labelText: 'Category',
+                    labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                    filled: true, fillColor: cs.surfaceContainerHighest,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                  ),
+                  items: _incomeCategories.map<DropdownMenuItem<String>>((c) {
+                    return DropdownMenuItem(value: c['name'] as String, child: Text(c['name'] as String));
+                  }).toList(),
+                  onChanged: (v) => setModalState(() => incomeCategory = v!),
+                ),
+              ],
+              if (incomeCategory.isNotEmpty)
+                buildCategoryFields(
+                  context: ctx,
+                  category: incomeCategory,
+                  metadata: metadata,
+                  onChanged: () => setModalState(() {}),
+                ),
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -357,8 +394,10 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                             'id': income?['id'] ?? const Uuid().v4(),
                             'amount': amount,
                             'source': sourceCtrl.text,
+                            'category': incomeCategory,
                             'frequency': frequency,
                             'dateTime': selectedDate.toIso8601String(),
+                            'metadata': encodeMetadata(metadata),
                           };
                           if (isEdit) {
                             await srv.database.updateIncome(income['id'] as String, data);
@@ -530,6 +569,8 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
     final amountCtrl = TextEditingController(text: loan?['amount']?.toString() ?? '');
     DateTime selectedDate = DateTime.tryParse(loan?['dateTime'] as String? ?? '') ?? DateTime.now();
     String loanType = loan?['loanType'] as String? ?? 'To Receive';
+    String loanCategory = loan?['category'] as String? ?? '';
+    Map<String, dynamic> metadata = decodeMetadata(loan?['metadata'] as String?);
     final isEdit = loan != null;
 
     showModalBottomSheet(
@@ -630,6 +671,31 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                   border: InputBorder.none,
                 ),
               ),
+              if (_loanCategories.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: loanCategory.isEmpty ? null : loanCategory,
+                  dropdownColor: cs.surfaceContainerHighest,
+                  style: TextStyle(color: cs.onSurface),
+                  decoration: InputDecoration(
+                    labelText: 'Category',
+                    labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                    filled: true, fillColor: cs.surfaceContainerHighest,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                  ),
+                  items: _loanCategories.map<DropdownMenuItem<String>>((c) {
+                    return DropdownMenuItem(value: c['name'] as String, child: Text(c['name'] as String));
+                  }).toList(),
+                  onChanged: (v) => setModalState(() => loanCategory = v!),
+                ),
+              ],
+              if (loanCategory.isNotEmpty)
+                buildCategoryFields(
+                  context: ctx,
+                  category: loanCategory,
+                  metadata: metadata,
+                  onChanged: () => setModalState(() {}),
+                ),
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -670,7 +736,9 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                             'personName': personCtrl.text,
                             'amount': amount,
                             'loanType': loanType,
+                            'category': loanCategory,
                             'dateTime': selectedDate.toIso8601String(),
+                            'metadata': encodeMetadata(metadata),
                           };
                           if (isEdit) {
                             await srv.database.updateLoan(loan['id'] as String, data);
@@ -845,6 +913,8 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
     final priceCtrl = TextEditingController(text: inv?['pricePerUnit']?.toString() ?? '');
     DateTime selectedDate = DateTime.tryParse(inv?['dateTime'] as String? ?? '') ?? DateTime.now();
     String type = inv?['type'] as String? ?? 'equity';
+    String invCategory = inv?['category'] as String? ?? '';
+    Map<String, dynamic> metadata = decodeMetadata(inv?['metadata'] as String?);
     final isEdit = inv != null;
 
     showModalBottomSheet(
@@ -930,6 +1000,31 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                 ],
                 onChanged: (v) => setModalState(() => type = v!),
               ),
+              if (_investmentCategories.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: invCategory.isEmpty ? null : invCategory,
+                  dropdownColor: cs.surfaceContainerHighest,
+                  style: TextStyle(color: cs.onSurface),
+                  decoration: InputDecoration(
+                    labelText: 'Category',
+                    labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                    filled: true, fillColor: cs.surfaceContainerHighest,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                  ),
+                  items: _investmentCategories.map<DropdownMenuItem<String>>((c) {
+                    return DropdownMenuItem(value: c['name'] as String, child: Text(c['name'] as String));
+                  }).toList(),
+                  onChanged: (v) => setModalState(() => invCategory = v!),
+                ),
+              ],
+              if (invCategory.isNotEmpty)
+                buildCategoryFields(
+                  context: ctx,
+                  category: invCategory,
+                  metadata: metadata,
+                  onChanged: () => setModalState(() {}),
+                ),
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -1002,9 +1097,11 @@ class _OtherEntriesScreenState extends State<OtherEntriesScreen> {
                             'id': inv?['id'] ?? const Uuid().v4(),
                             'name': nameCtrl.text,
                             'type': type,
+                            'category': invCategory,
                             'units': units,
                             'pricePerUnit': price,
                             'dateTime': selectedDate.toIso8601String(),
+                            'metadata': encodeMetadata(metadata),
                           };
                           if (isEdit) {
                             await srv.database.updateInvestment(inv['id'] as String, data);

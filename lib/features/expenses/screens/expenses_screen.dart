@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:intl/intl.dart';
 import 'package:money_manager/config/app_colors.dart';
+import 'package:money_manager/features/shared/widgets/category_dependent_fields.dart';
 import 'package:money_manager/providers/auth_provider.dart';
 
 class ExpensesScreen extends StatefulWidget {
@@ -15,6 +16,7 @@ class ExpensesScreen extends StatefulWidget {
 class _ExpensesScreenState extends State<ExpensesScreen> {
   final _searchController = TextEditingController();
   String? _selectedCategory;
+  String _sortOrder = 'newest';
   List<Map<String, dynamic>> _expenses = [];
   List<Map<String, dynamic>> _categories = [];
   bool _isLoading = true;
@@ -42,10 +44,24 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       expenses.sort((a, b) {
         final da = DateTime.tryParse(a['dateTime'] as String? ?? '');
         final db = DateTime.tryParse(b['dateTime'] as String? ?? '');
-        if (da == null && db == null) return 0;
-        if (da == null) return 1;
-        if (db == null) return -1;
-        return db.compareTo(da);
+        final amtA = (a['amount'] as num?)?.toDouble() ?? 0;
+        final amtB = (b['amount'] as num?)?.toDouble() ?? 0;
+        switch (_sortOrder) {
+          case 'oldest':
+            if (da == null && db == null) return 0;
+            if (da == null) return 1;
+            if (db == null) return -1;
+            return da.compareTo(db);
+          case 'highest':
+            return amtB.compareTo(amtA);
+          case 'lowest':
+            return amtA.compareTo(amtB);
+          default: // newest
+            if (da == null && db == null) return 0;
+            if (da == null) return 1;
+            if (db == null) return -1;
+            return db.compareTo(da);
+        }
       });
       if (mounted) setState(() { _categories = cats; _expenses = expenses; _isLoading = false; });
     } catch (_) {
@@ -59,6 +75,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     DateTime selectedDate = DateTime.now();
     String category = _categories.isNotEmpty ? (_categories.first['name'] as String) : 'Other';
     String? tag;
+    Map<String, dynamic> metadata = {};
 
     showModalBottomSheet(
       context: context,
@@ -78,6 +95,12 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           child: StatefulBuilder(
             builder: (ctx, setModalState) {
               final cs = Theme.of(ctx).colorScheme;
+              final recentAmounts = _expenses
+                  .where((e) => e['category'] == category)
+                  .map((e) => (e['amount'] as num?)?.toDouble() ?? 0)
+                  .toSet()
+                  .take(3)
+                  .toList();
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -106,6 +129,18 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       border: InputBorder.none,
                     ),
                   ),
+                  if (recentAmounts.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Wrap(
+                        spacing: 8,
+                        children: recentAmounts.map((amt) => ActionChip(
+                          label: Text('₹${amt.toStringAsFixed(0)}', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                          backgroundColor: cs.surfaceContainerHighest,
+                          onPressed: () => setModalState(() { amountCtrl.text = amt.toStringAsFixed(2); }),
+                        )).toList(),
+                      ),
+                    ),
                   const SizedBox(height: 12),
                   GestureDetector(
                     onTap: () async {
@@ -170,6 +205,12 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       onChanged: (v) => setModalState(() => tag = v),
                     ),
                   ],
+                  buildCategoryFields(
+                    context: ctx,
+                    category: category,
+                    metadata: metadata,
+                    onChanged: () => setModalState(() {}),
+                  ),
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity, height: 56,
@@ -190,6 +231,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                             'amount': amount,
                             'category': category,
                             'tag': tag,
+                            'metadata': encodeMetadata(metadata),
                             'dateTime': selectedDate.toIso8601String(),
                           });
                           await _loadData();
@@ -226,6 +268,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     DateTime selectedDate = DateTime.tryParse(expense['dateTime'] as String? ?? '') ?? DateTime.now();
     String category = expense['category'] as String? ?? (_categories.isNotEmpty ? (_categories.first['name'] as String) : 'Other');
     String? tag = expense['tag'] as String?;
+    Map<String, dynamic> metadata = decodeMetadata(expense['metadata'] as String?);
 
     showModalBottomSheet(
       context: context,
@@ -245,6 +288,12 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           child: StatefulBuilder(
             builder: (ctx, setModalState) {
               final cs = Theme.of(ctx).colorScheme;
+              final recentAmounts = _expenses
+                  .where((e) => e['category'] == category)
+                  .map((e) => (e['amount'] as num?)?.toDouble() ?? 0)
+                  .toSet()
+                  .take(3)
+                  .toList();
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -273,6 +322,18 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       border: InputBorder.none,
                     ),
                   ),
+                  if (recentAmounts.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Wrap(
+                        spacing: 8,
+                        children: recentAmounts.map((amt) => ActionChip(
+                          label: Text('₹${amt.toStringAsFixed(0)}', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                          backgroundColor: cs.surfaceContainerHighest,
+                          onPressed: () => setModalState(() { amountCtrl.text = amt.toStringAsFixed(2); }),
+                        )).toList(),
+                      ),
+                    ),
                   const SizedBox(height: 12),
                   GestureDetector(
                     onTap: () async {
@@ -337,6 +398,12 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       onChanged: (v) => setModalState(() => tag = v),
                     ),
                   ],
+                  buildCategoryFields(
+                    context: ctx,
+                    category: category,
+                    metadata: metadata,
+                    onChanged: () => setModalState(() {}),
+                  ),
                   const SizedBox(height: 16),
                   Row(
                     children: [
@@ -376,6 +443,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                                 'amount': amount,
                                 'category': category,
                                 'tag': tag,
+                                'metadata': encodeMetadata(metadata),
                                 'dateTime': selectedDate.toIso8601String(),
                               });
                               await _loadData();
@@ -595,6 +663,44 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     );
   }
 
+  Widget _buildSortBar() {
+    final cs = Theme.of(context).colorScheme;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          ...['newest', 'oldest', 'highest', 'lowest'].map((s) {
+            final icons = {'newest': Icons.arrow_downward, 'oldest': Icons.arrow_upward, 'highest': Icons.trending_up, 'lowest': Icons.trending_down};
+            final labels = {'newest': 'Newest', 'oldest': 'Oldest', 'highest': 'Highest', 'lowest': 'Lowest'};
+            final isSelected = _sortOrder == s;
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: GestureDetector(
+                onTap: () => setState(() { _sortOrder = s; _loadData(); }),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isSelected ? cs.primary.withValues(alpha: 0.2) : cs.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: isSelected ? cs.primary : Colors.transparent),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(icons[s]!, size: 14, color: isSelected ? cs.primary : cs.onSurfaceVariant),
+                      const SizedBox(width: 6),
+                      Text(labels[s]!, style: TextStyle(fontSize: 12, color: isSelected ? cs.primary : cs.onSurfaceVariant)),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFilterBar() {
     return Container(
       margin: const EdgeInsets.all(16),
@@ -627,6 +733,8 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
             ),
             onChanged: (_) => _loadData(),
           ),
+          const SizedBox(height: 12),
+          _buildSortBar(),
           const SizedBox(height: 12),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,

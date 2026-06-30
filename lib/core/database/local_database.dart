@@ -530,6 +530,7 @@ class LocalDatabaseService {
       {'name': 'Personal Care', 'color': 0xFFE879F9, 'tags': ['Salon', 'Skincare', 'Gym', 'Wellness']},
       {'name': 'Gifts & Donations', 'color': 0xFFF59E0B, 'tags': ['Birthday', 'Charity', 'Festival']},
       {'name': 'Home Maintenance', 'color': 0xFFFB923C, 'tags': ['Repair', 'Cleaning', 'Furniture', 'Appliances']},
+      {'name': 'Vehicle Maintenance', 'color': 0xFF10B981, 'tags': ['Regular Service', 'Repair', 'Puncture', 'Battery', 'Tyre Change', 'Insurance']},
       {'name': 'Miscellaneous', 'color': 0xFF64748B, 'tags': ['ATM Fee', 'Fine', 'Other']},
     ],
     'income': [

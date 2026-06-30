@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:money_manager/features/shared/widgets/category_dependent_fields.dart';
 import 'package:uuid/uuid.dart';
 import 'package:intl/intl.dart';
 import 'package:money_manager/config/app_colors.dart';
@@ -76,8 +77,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
     }
     String category = categories.isNotEmpty ? (categories.first['name'] as String) : '';
     String? selectedTag;
-    List<double> _recentAmounts = [];
-    bool _initLoaded = false;
+    Map<String, dynamic> metadata = {};
 
     if (!context.mounted) return;
     showModalBottomSheet(
@@ -97,17 +97,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
           ),
           child: StatefulBuilder(
             builder: (ctx, setModalState) {
-              Future<void> _loadRecentAmounts(String cat) async {
-                final srv = context.read<AuthProvider>().authService;
-                if (srv == null) return;
-                final exps = await srv.database.listExpenses(categoryFilter: cat);
-                final amounts = exps.map((e) => (e['amount'] as num?)?.toDouble() ?? 0).toSet().take(3).toList();
-                setModalState(() => _recentAmounts = amounts.cast<double>());
-              }
-              if (!_initLoaded) {
-                _initLoaded = true;
-                _loadRecentAmounts(category);
-              }
+
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -126,20 +116,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
                     border: InputBorder.none,
                   ),
                 ),
-                if (_recentAmounts.isNotEmpty)
-                  Padding(
-                    padding: EdgeInsets.only(top: 8),
-                    child: Wrap(
-                      spacing: 8,
-                      children: _recentAmounts.map((amt) => ActionChip(
-                        label: Text('₹${amt.toStringAsFixed(0)}', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-                        backgroundColor: cs.surfaceContainerHighest,
-                        onPressed: () {
-                          setModalState(() { amountCtrl.text = amt.toStringAsFixed(2); });
-                        },
-                      )).toList(),
-                    ),
-                  ),
+
                 Divider(color: cs.surfaceContainerHighest),
               const SizedBox(height: 12),
               GestureDetector(
@@ -199,7 +176,6 @@ class _MainAppScreenState extends State<MainAppScreen> {
                 onChanged: (v) => setModalState(() {
                   category = v!;
                   selectedTag = null;
-                  _loadRecentAmounts(category);
                 }),
               ),
               if (category.isNotEmpty && categories.any((c) => c['name'] == category && (c['tags'] as List?)?.isNotEmpty == true)) ...[
@@ -222,6 +198,12 @@ class _MainAppScreenState extends State<MainAppScreen> {
                   onChanged: (v) => setModalState(() => selectedTag = v),
                 ),
               ],
+              buildCategoryFields(
+                context: ctx,
+                category: category,
+                metadata: metadata,
+                onChanged: () => setModalState(() {}),
+              ),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity, height: 56,
@@ -243,6 +225,7 @@ class _MainAppScreenState extends State<MainAppScreen> {
                         'category': category,
                         'tag': selectedTag,
                         'dateTime': selectedDate.toIso8601String(),
+                        'metadata': encodeMetadata(metadata),
                       });
                       if (ctx.mounted) {
                         Navigator.pop(ctx);
